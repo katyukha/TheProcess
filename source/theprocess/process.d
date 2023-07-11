@@ -55,31 +55,55 @@ private import theprocess.exception: ProcessException;
       * Returns:
       *     True it exit status is equal to expected result, otherwise False.
       **/
-    bool isOk(in bool expected=0) const { return this.status == exepected; }
+    bool isOk(in int expected=0) const { return this.status == expected; }
+
+    /** Check if status is not Ok.
+      *
+      * Params:
+      *     expected = expected successfule exit code. Default: 0
+      *
+      * Returns:
+      *     True it exit status is NOT equal to expected result, otherwise False.
+      **/
+    bool isNotOk(in int expected=0) const { return !isOk(expected); }
 
     /** Ensure that program exited with expected exit code
       *
       * Params:
       *     msg = message to throw in exception in case of check failure
+      *     add_output = if set to True, then output of command will be attached
+      *         to message on failure.
       *     expected = expected exit-code, if differ, then
       *         exception will be thrown.
       **/
     auto ref ensureStatus(E : Throwable = ProcessException)(
-            in string msg, in int expected=0) const {
-        enforce!E(isOk(expected), msg);
+            in string msg, in bool add_output, in int expected=0) const {
+        enforce!E(
+            isOk(expected),
+            add_output ? msg : msg ~ "\nOutput: " ~ output);
         return this;
     }
 
-    ///
-    alias ensureOk = ensureStatus;
+    /// ditto
+    auto ref ensureStatus(E : Throwable = ProcessException)(
+            in string msg, in int expected=0) const {
+        return ensureStatus(
+            msg,
+            true,
+            expected);
+    }
 
     /// ditto
     auto ref ensureStatus(E : Throwable = ProcessException)(in int expected=0) const {
         return ensureStatus(
-            "Program %s with args %s failed! Expected exit code %s, got %s.\nOutput: %s".format(
-                _program, _args, expected, status, output),
+            "Program %s with args %s failed! Expected exit-code %s, got %s.".format(
+                _program, _args, expected, status),
             expected);
     }
+
+    /// ditto
+    alias ensureOk = ensureStatus;
+
 }
 
 
