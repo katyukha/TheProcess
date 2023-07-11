@@ -18,7 +18,7 @@ version(Posix) {
 private import thepath;
 
 private import theprocess.utils;
-private import theprocess.exception;
+private import theprocess.exception: ProcessException;
 
 
 /** Process result, produced by 'execute' method of Process.
@@ -47,6 +47,16 @@ private import theprocess.exception;
         this.output = output;
     }
 
+    /** Check if status is Ok.
+      *
+      * Params:
+      *     expected = expected exit code. Default: 0
+      *
+      * Returns:
+      *     True it exit status is equal to expected result, otherwise False.
+      **/
+    bool isOk(in bool expected=0) const { return this.status == exepected; }
+
     /** Ensure that program exited with expected exit code
       *
       * Params:
@@ -56,9 +66,12 @@ private import theprocess.exception;
       **/
     auto ref ensureStatus(E : Throwable = ProcessException)(
             in string msg, in int expected=0) const {
-        enforce!E(status == expected, msg);
+        enforce!E(isOk(expected), msg);
         return this;
     }
+
+    ///
+    alias ensureOk = ensureStatus;
 
     /// ditto
     auto ref ensureStatus(E : Throwable = ProcessException)(in int expected=0) const {

@@ -15,3 +15,4 @@ theprocess-test-*
 *.obj
 *.lst
 *.sw[npo]
+/build
