@@ -1,0 +1,20 @@
+name "theprocess"
+description "The easy way to run external commands"
+authors "Dmytro Katyukha"
+copyright "Copyright © 2023, Dmytro Katyukha"
+license "MPL-2"
+targetPath "./build/"
+targetType "library"
+
+dependency "thepath" version=">=0.1.7"
+
+configuration "library" {
+}
+
+configuration "sourceLibrary" {
+}
+
+configuration "unittest" {
+    dependency "dshould" version=">=1.7.0"
+}
+
