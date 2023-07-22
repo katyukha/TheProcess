@@ -1,3 +1,6 @@
+/** Module that defines exceptions that may be thrown when dealing with
+  * processes spawned by this library.
+  **/
 module theprocess.exception;
 
 private import std.exception;
