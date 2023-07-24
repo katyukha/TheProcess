@@ -1,4 +1,4 @@
-/** Module to easily run other programs.
+/** Module that defines the main `Process` struct and associated components.
   **/
 module theprocess.process;
 
@@ -23,8 +23,11 @@ private import theprocess.exception: ProcessException;
 
 /** Process result, produced by 'execute' method of Process.
   **/
-@safe const struct ProcessResult {
+@safe immutable struct ProcessResult {
+    /// The program that was invoked to obtain this result.
     private string _program;
+
+    /// The arguments passed to the program to obtain this result.
     private string[] _args;
 
     /// exit code of the process
@@ -38,7 +41,7 @@ private import theprocess.exception: ProcessException;
 
     private pure this(
             in string program,
-            in string[] args,
+            immutable string[] args,
             in int status,
             in string output) nothrow {
         this._program = program;
@@ -67,7 +70,7 @@ private import theprocess.exception: ProcessException;
       **/
     bool isNotOk(in int expected=0) const { return !isOk(expected); }
 
-    /** Ensure that program exited with expected exit code
+    /** Ensure that program exited with expected exit code.
       *
       * Params:
       *     msg = message to throw in exception in case of check failure
@@ -109,21 +112,21 @@ private import theprocess.exception: ProcessException;
 
 /** This struct is used to prepare configuration for process and run it.
   *
-  * Following ways to run process supported:
-  * - execute: run process and catch its output and exit code
-  * - spawn: spawn the process in background, and optionally pip its output.
+  * The following methods of running a process are supported:
+  * - execute: run process and catch its output and exit code.
+  * - spawn: spawn the process in background, and optionally pipe its output.
   * - pipe: spawn the process and attach configurable pipes to catch output.
   *
-  * The configuration of process to run performend in following a way:
-  * 1. Create the Process instance specifying the program to run
-  * 2. Apply desired configuration (args, env, workDir)
-  *    via calls to corresponding methods.
-  * 3. Run one of `execute`, `spawn` or `pipe` method, that will do actual
-  *    start of the process.
+  * The configuration of a process can be done like so:
+  * 1. Create the `Process` instance specifying the program to run.
+  * 2. Apply your desired configuration (args, env, workDir)
+  *    via calls to one of the corresponding methods.
+  * 3. Run one of `execute`, `spawn` or `pipe` methods, that will actually
+  *    start the process.
   *
-  * Configuration methods usually prefixed with `set` word, but also,
-  * they have semantic aliases. For example, method `setArgs` also has
-  * alias `withArgs`, and method `setWorkDir` has alias `inWorkDir`.
+  * Configuration methods are usually prefixed with `set` word, but they
+  * may also have semantic aliases. For example, the method `setArgs` also has
+  * an alias `withArgs`, and the method `setWorkDir` has an alias `inWorkDir`.
   * Additionally, configuration methods always
   * return the reference to current instance of the Process being configured.
   *
@@ -492,7 +495,7 @@ private import theprocess.exception: ProcessException;
             max_output,
             _workdir);
         tearDownProcess();
-        return ProcessResult(_program, _args, res.status, res.output);
+        return ProcessResult(_program, _args.idup, res.status, res.output);
     }
 
     /// Spawn process
