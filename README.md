@@ -6,6 +6,8 @@ thus it allows to easily use complex logic to prepare arguments and env for exte
 
 Current stage: ***Alpha***
 
+## Examples
+
 Just few real examples at the moment:
 
 ```d
@@ -60,3 +62,8 @@ auto pid = runner.spawn();
 if (!detach)
     std.process.wait(pid);
 ```
+
+
+## License
+
+This library is licensed under MPL-2.0 license
