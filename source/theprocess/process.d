@@ -548,3 +548,29 @@ private import theprocess.exception: ProcessException;
             process._env, process._workdir);
 }
 
+/// Test simple execute via shell
+@safe unittest {
+    import std.string;
+
+    import unit_threaded.assertions;
+
+    auto temp_root = createTempPath();
+    scope(exit) temp_root.remove();
+
+    version(Posix) {
+        auto script_path = temp_root.join("test-script.sh");
+        script_path.writeFile(
+            `echo "Test out: $1 $2"`);
+    } else version(Windows) {
+        auto script_path = temp_root.join("test-script.cmd");
+        script_path.writeFile(`echo "Test out: %1 %2"`);
+    }
+
+    auto result = Process(std.process.nativeShell)
+        .withArgs(script_path.toString)
+        .addArgs("Hello", "World", "!")
+        .execute()
+        .ensureOk;
+    result.status.should == 0;
+    result.output.chomp.should == "Test out: Hello World";
+}
