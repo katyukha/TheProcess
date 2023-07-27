@@ -551,6 +551,8 @@ private import theprocess.exception: ProcessException;
 /// Test simple execute via shell
 @safe unittest {
     import std.string;
+    import std.ascii : newline;
+    import std.conv: octal;
 
     import unit_threaded.assertions;
 
@@ -560,17 +562,20 @@ private import theprocess.exception: ProcessException;
     version(Posix) {
         auto script_path = temp_root.join("test-script.sh");
         script_path.writeFile(
-            `echo "Test out: $1 $2"`);
+            "#!" ~ nativeShell ~ newline ~
+            `echo "Test out: $1 $2"` ~ newline);
+        // Add permission to run this script
+        script_path.setAttributes(octal!755);
     } else version(Windows) {
         auto script_path = temp_root.join("test-script.cmd");
-        script_path.writeFile(`echo "Test out: %1 %2"`);
+        script_path.writeFile(
+            "@echo off" ~ newline ~
+            "echo Test out: %1 %2" ~ newline);
     }
 
-    auto result = Process(std.process.nativeShell)
-        .withArgs(script_path.toString)
-        .addArgs("Hello", "World", "!")
-        .execute()
-        .ensureOk;
+    auto process = Process(script_path.toString)
+        .withArgs("Hello", "World", "test");
+    auto result = process.execute().ensureOk;
     result.status.should == 0;
     result.output.chomp.should == "Test out: Hello World";
 }
