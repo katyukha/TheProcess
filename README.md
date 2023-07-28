@@ -8,7 +8,7 @@ Current stage: ***Alpha***
 
 ## Examples
 
-Just few real examples at the moment:
+Just few real examples from projects that use this lib:
 
 ```d
 // Simply run git add command
@@ -53,6 +53,7 @@ runner.addArgs(scriptPath.toString);
 runner.addArgs(options);
 
 if (detach) {
+    // If we want to run the server in background
     runner.setFlag(Config.detached);
     runner.addArgs("--logfile=%s".format(_project.odoo.logfile));
 }

@@ -548,11 +548,10 @@ private import theprocess.exception: ProcessException;
             process._env, process._workdir);
 }
 
-/// Test simple execute via shell
+/// Test simple execution of the script
 @safe unittest {
     import std.string;
     import std.ascii : newline;
-    import std.conv: octal;
 
     import unit_threaded.assertions;
 
@@ -560,6 +559,7 @@ private import theprocess.exception: ProcessException;
     scope(exit) temp_root.remove();
 
     version(Posix) {
+        import std.conv: octal;
         auto script_path = temp_root.join("test-script.sh");
         script_path.writeFile(
             "#!" ~ nativeShell ~ newline ~
