@@ -41,7 +41,11 @@ version(Posix) unittest {
     import unit_threaded.assertions;
 
     resolveProgram("sh").isNull.shouldBeFalse;
-    resolveProgram("sh").get.toString.shouldEqual("/usr/bin/sh");
+
+    version(OSX)
+        resolveProgram("sh").get.toString.shouldEqual("/bin/sh");
+    else
+        resolveProgram("sh").get.toString.shouldEqual("/usr/bin/sh");
 
     resolveProgram("unexisting_program").isNull.shouldBeTrue;
 }

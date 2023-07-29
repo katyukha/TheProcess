@@ -15,6 +15,6 @@ configuration "sourceLibrary" {
 }
 
 configuration "unittest" {
-    dependency "dshould" version=">=1.7.0"
+    dependency "unit-threaded:assertions" version="*"
 }
 
