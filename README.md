@@ -10,10 +10,10 @@ thus it allows to easily use complex logic to prepare arguments and env for exte
 
 ---
 
-[![Github Actions](https://github.com/katyukha/thepath/actions/workflows/tests.yml/badge.svg)](https://github.com/katyukha/thepath/actions/workflows/tests.yml?branch=master)
-[![codecov](https://codecov.io/gh/katyukha/thepath/branch/master/graph/badge.svg?token=IUXBCNSHNQ)](https://codecov.io/gh/katyukha/thepath)
-[![DUB](https://img.shields.io/dub/v/thepath)](https://code.dlang.org/packages/thepath)
-![DUB](https://img.shields.io/dub/l/thepath)
+[![Github Actions](https://github.com/katyukha/theprocess/actions/workflows/tests.yml/badge.svg)](https://github.com/katyukha/theprocess/actions/workflows/tests.yml?branch=master)
+[![codecov](https://codecov.io/gh/katyukha/theprocess/branch/master/graph/badge.svg?token=IUXBCNSHNQ)](https://codecov.io/gh/katyukha/theprocess)
+[![DUB](https://img.shields.io/dub/v/theprocess)](https://code.dlang.org/packages/theprocess)
+![DUB](https://img.shields.io/dub/l/theprocess)
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-Latest-green?logo=Ubuntu)
 ![Windows](https://img.shields.io/badge/Windows-Latest-green?logo=Windows)
