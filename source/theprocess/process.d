@@ -156,6 +156,14 @@ private import theprocess.exception: ProcessException;
     private string _workdir=null;
     private std.process.Config _config=std.process.Config.none;
 
+    /* TODO: May be it have sense to add somekind of lock
+     *       to wrap execution of process in multithreaded mode.
+     *       It seems that this is needed on Posix systems,
+     *       especially in case when running process with different
+     *       uid/git, that requires temporary change of uid/gid of current
+     *       process, but uid and gid are attributes of process, not thread.
+     */
+
     version(Posix) {
         /* On posix we have ability to run process with different user,
          * thus we have to keep desired uid/gid to run process with and
@@ -590,6 +598,23 @@ private import theprocess.exception: ProcessException;
         "Program: %s, args: %s, env: %s, workdir: %s".format(
             process._program, process._args.join(" "),
             process._env, process._workdir);
+
+    // Change some params of the process
+    process.setWorkDir(Path("/some/other/path"));
+    process.setEnv([
+        "MY_VAR_2": "72",
+    ]);
+    process.addArgs("arg2", "arg3");
+
+    // Check that changes took effect
+    process._program.should == "my-program";
+    process._args.should == ["--verbose", "--help", "arg2", "arg3"];
+    process._env.should == ["MY_VAR": "42", "MY_VAR_2": "72"];
+    process._workdir.should == "/some/other/path";
+    process.toString.should ==
+        "Program: %s, args: %s, env: %s, workdir: %s".format(
+            process._program, process._args.join(" "),
+            process._env, process._workdir);
 }
 
 /// Test simple execution of the script
@@ -617,9 +642,60 @@ private import theprocess.exception: ProcessException;
             "echo Test out: %1 %2" ~ newline);
     }
 
-    auto process = Process(script_path.toString)
-        .withArgs("Hello", "World", "test");
-    auto result = process.execute().ensureOk;
+    // Test the case when process executes fine
+    auto result = Process(script_path)
+        .withArgs("Hello", "World", "test")
+        .execute
+        .ensureOk;
     result.status.should == 0;
     result.output.chomp.should == "Test out: Hello World";
+    result.isOk.shouldBeTrue;
+    result.isNotOk.shouldBeFalse;
+    // When we expect different successful exit-code
+    result.isOk(42).shouldBeFalse;
+    result.isNotOk(42).shouldBeTrue;
+    result.ensureOk(42).shouldThrow!ProcessException;
+}
+
+/// Test simple execution of the script that handles environment variables
+@safe unittest {
+    import std.string;
+    import std.ascii : newline;
+
+    import unit_threaded.assertions;
+
+    auto temp_root = createTempPath();
+    scope(exit) temp_root.remove();
+
+    version(Posix) {
+        import std.conv: octal;
+        auto script_path = temp_root.join("test-script.sh");
+        script_path.writeFile(
+            "#!" ~ nativeShell ~ newline ~
+            `echo "Test out: $1 $2, $MY_PARAM_1 $MY_PARAM_2"` ~ newline);
+        // Add permission to run this script
+        script_path.setAttributes(octal!755);
+    } else version(Windows) {
+        auto script_path = temp_root.join("test-script.cmd");
+        script_path.writeFile(
+            "@echo off" ~ newline ~
+            "echo Test out: %1 %2, %MY_PARAM_1% %MY_PARAM_2%" ~ newline);
+    }
+
+    // Test the case when process executes fine
+    auto result = Process(script_path)
+        .withArgs("Hello")
+        .addArgs("World")
+        .withEnv("MY_PARAM_1", "the")
+        .withEnv("MY_PARAM_2", "Void")
+        .execute
+        .ensureOk;
+    result.status.should == 0;
+    result.output.chomp.should == "Test out: Hello World, the Void";
+    result.isOk.shouldBeTrue;
+    result.isNotOk.shouldBeFalse;
+    // When we expect different successful exit-code
+    result.isOk(42).shouldBeFalse;
+    result.isNotOk(42).shouldBeTrue;
+    result.ensureOk(42).shouldThrow!ProcessException;
 }
