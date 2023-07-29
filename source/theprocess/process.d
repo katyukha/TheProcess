@@ -527,6 +527,50 @@ private import theprocess.exception: ProcessException;
         tearDownProcess();
         return res;
     }
+
+    /** Replace current process by executing program as configured by
+      * Process instance.
+      *
+      * Under the hood, this method will call $(REF execvpe, std, process) or
+      * $(REF execvp, std, process).
+      **/
+    version(Posix) void execv() @system {
+        import std.algorithm;
+        import std.array;
+
+        if (_workdir)
+            // Change working directory, when needed before executing the program
+            std.file.chdir(_workdir);
+
+        if (!_env) {
+            /* Run the program, and in case when it could not be started for
+             * some reason, throw exception.
+             *
+             * For more info, see docs: https://dlang.org/library/std/process/execv.html
+             */
+            enforce!ProcessException(
+                std.process.execvp(_program, [_program] ~ _args) != -1,
+                "Cannot exec program %s".format(this));
+
+            /* This will not be executed in any way, because on success
+             * the current process will be replaced and on failure exception will be thrown.
+             * but add it here to make code look consistent.
+             */
+            return;
+        }
+
+        /* In case when we have environment specified, we have to
+         * call `execvpe` function, and thus we have to convert environment
+         * variables to format suitable for this function
+         * (array of strings in format `key=value`
+         */
+        string[] env_arr = _env.byKeyValue.map!(
+            (i) => "%s=%s".format(i.key, i.value)
+        ).array;
+        enforce!ProcessException(
+            std.process.execvpe(_program, [_program] ~ _args, env_arr) != -1,
+            "Cannot exec program %s".format(this));
+    }
 }
 
 
