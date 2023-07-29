@@ -17,7 +17,7 @@ private import thepath;
 /** Resolve program name according to system path
   *
   * Params:
-  *     name = name of program to find
+  *     program = name of program to find
   * Returns:
   *     Nullable!Path to program.
   **/

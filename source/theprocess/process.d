@@ -113,11 +113,13 @@ private import theprocess.exception: ProcessException;
 /** This struct is used to prepare configuration for process and run it.
   *
   * The following methods of running a process are supported:
+  *
   * - execute: run process and catch its output and exit code.
   * - spawn: spawn the process in background, and optionally pipe its output.
   * - pipe: spawn the process and attach configurable pipes to catch output.
   *
   * The configuration of a process can be done like so:
+  *
   * 1. Create the `Process` instance specifying the program to run.
   * 2. Apply your desired configuration (args, env, workDir)
   *    via calls to one of the corresponding methods.
@@ -140,6 +142,7 @@ private import theprocess.exception: ProcessException;
   *         .execute()
   *         .ensureStatus!MyException("My error message on failure");
   * writeln(result.output);
+  * ---
   * ---
   * // Also, in Posix system it is possible to run command as different user:
   * auto result = Process('my-program')
