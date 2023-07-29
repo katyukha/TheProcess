@@ -4,9 +4,53 @@ This lib is designed to be able to easily run external process with complex conf
 It uses builder pattern to configure process (args, env, workdir, etc),
 thus it allows to easily use complex logic to prepare arguments and env for external process.
 
-Current stage: ***Alpha***
+---
+
+![Current status](https://img.shields.io/badge/Current%20Status-Alpha-purple)
+
+---
+
+[![Github Actions](https://github.com/katyukha/thepath/actions/workflows/tests.yml/badge.svg)](https://github.com/katyukha/thepath/actions/workflows/tests.yml?branch=master)
+[![codecov](https://codecov.io/gh/katyukha/thepath/branch/master/graph/badge.svg?token=IUXBCNSHNQ)](https://codecov.io/gh/katyukha/thepath)
+[![DUB](https://img.shields.io/dub/v/thepath)](https://code.dlang.org/packages/thepath)
+![DUB](https://img.shields.io/dub/l/thepath)
+
+![Ubuntu](https://img.shields.io/badge/Ubuntu-Latest-green?logo=Ubuntu)
+![Windows](https://img.shields.io/badge/Windows-Latest-green?logo=Windows)
+![MacOS](https://img.shields.io/badge/MacOS-Latest-green?logo=Apple)
+
+---
 
 ## Examples
+
+Simply execute the program:
+
+```d
+auto result = Process("my-program")
+    .withArgs("arg1", "arg2")
+    .withEnv("MY_VAR_1", 42")
+    .inWorkDir("/my/work/dir")
+    .execute
+    .ensureOk;  //check exit code
+
+writefln("Result status: %s",  result.status);  // print exit code
+writefln("Result output: %s", result.output);   // print output
+```
+
+Run process in background
+
+```d
+auto pid = Process("my-program")
+    .withArgs("arg1", "arg2")
+    .withEnv("MY_VAR_1", 42")
+    .inWorkDir("/my/work/dir")
+    .spawn;
+
+// Do some other work
+
+auto exit_code = pid.wait();
+writefln("Process completed. Exit-code: %s", exit_code);
+```
 
 Just few real examples from projects that use this lib:
 
