@@ -28,7 +28,7 @@ Simply execute the program:
 ```d
 auto result = Process("my-program")
     .withArgs("arg1", "arg2")
-    .withEnv("MY_VAR_1", 42")
+    .withEnv("MY_VAR_1", "42")
     .inWorkDir("/my/work/dir")
     .execute
     .ensureOk;  //check exit code
@@ -42,7 +42,7 @@ Run process in background
 ```d
 auto pid = Process("my-program")
     .withArgs("arg1", "arg2")
-    .withEnv("MY_VAR_1", 42")
+    .withEnv("MY_VAR_1", "42")
     .inWorkDir("/my/work/dir")
     .spawn;
 

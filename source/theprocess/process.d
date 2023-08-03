@@ -83,25 +83,31 @@ private import theprocess.exception: ProcessException;
             in string msg, in bool add_output, in int expected=0) const {
         enforce!E(
             isOk(expected),
-            add_output ? msg : msg ~ "\nOutput: " ~ output);
+            !add_output ? msg : msg ~ "\nOutput: " ~ output);
         return this;
     }
 
     /// ditto
     auto ref ensureStatus(E : Throwable = ProcessException)(
             in string msg, in int expected=0) const {
-        return ensureStatus(
+        return ensureStatus!E(
             msg,
-            true,
+            false,
+            expected);
+    }
+
+    /// ditto
+    auto ref ensureStatus(E : Throwable = ProcessException)(in bool add_output, in int expected=0) const {
+        return ensureStatus!E(
+            "Program %s with args %s failed! Expected exit-code %s, got %s.".format(
+                _program, _args, expected, status),
+            add_output,
             expected);
     }
 
     /// ditto
     auto ref ensureStatus(E : Throwable = ProcessException)(in int expected=0) const {
-        return ensureStatus(
-            "Program %s with args %s failed! Expected exit-code %s, got %s.".format(
-                _program, _args, expected, status),
-            expected);
+        return ensureStatus!E(false, expected);
     }
 
     /// ditto
@@ -135,7 +141,7 @@ private import theprocess.exception: ProcessException;
   * Examples:
   * ---
   * // It is possible to run process in following way:
-  * auto result = Process('my-program')
+  * auto result = Process("my-program")
   *         .withArgs("--verbose", "--help")
   *         .withEnv("MY_ENV_VAR", "MY_VALUE")
   *         .inWorkDir("my/working/directory")
@@ -145,7 +151,7 @@ private import theprocess.exception: ProcessException;
   * ---
   * ---
   * // Also, in Posix system it is possible to run command as different user:
-  * auto result = Process('my-program')
+  * auto result = Process("my-program")
   *         .withUser("bob")
   *         .execute()
   *         .ensureStatus!MyException("My error message on failure");
@@ -670,19 +676,24 @@ private import theprocess.exception: ProcessException;
     auto temp_root = createTempPath();
     scope(exit) temp_root.remove();
 
+    /* Do similar trick as in Phobos for portable newline output
+     *
+     * To avoid printing the newline characters, we use the echo|set trick on
+     * Windows, and printf on POSIX (neither echo -n nor echo \c are portable).
+     */
     version(Posix) {
         import std.conv: octal;
         auto script_path = temp_root.join("test-script.sh");
         script_path.writeFile(
             "#!" ~ nativeShell ~ newline ~
-            `echo "Test out: $1 $2, $MY_PARAM_1 $MY_PARAM_2"` ~ newline);
+            `printf "Test out: $1 $2, $MY_PARAM_1 $MY_PARAM_2"` ~ newline);
         // Add permission to run this script
         script_path.setAttributes(octal!755);
     } else version(Windows) {
         auto script_path = temp_root.join("test-script.cmd");
         script_path.writeFile(
-            "@echo off" ~ newline ~
-            "echo Test out: %1 %2, %MY_PARAM_1% %MY_PARAM_2%" ~ newline);
+            `@echo off` ~ newline ~
+            `echo|set /p DUMMY="Test out: %1 %2, %MY_PARAM_1% %MY_PARAM_2%"` ~ newline);
     }
 
     // Test the case when process executes fine
@@ -700,5 +711,16 @@ private import theprocess.exception: ProcessException;
     // When we expect different successful exit-code
     result.isOk(42).shouldBeFalse;
     result.isNotOk(42).shouldBeTrue;
+
+    // Ensure that status is ok, if not ok, then raise error
     result.ensureOk(42).shouldThrow!ProcessException;
+
+    // Optionally allow to print command output on failure with custom error message or with standard one.
+    result.ensureOk("Custom error message", 42).shouldThrowWithMessage!ProcessException(
+        "Custom error message");
+    result.ensureOk("Error message", true, 42).shouldThrowWithMessage!ProcessException(
+        "Error message\nOutput: %s".format("Test out: Hello World, the Void"));
+    result.ensureOk(true, 42).shouldThrowWithMessage!ProcessException(
+        "Program %s with args %s failed! Expected exit-code %s, got %s.\nOutput: %s".format(
+            result._program, result._args, 42, 0, "Test out: Hello World, the Void"));
 }
