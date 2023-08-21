@@ -307,6 +307,17 @@ private import theprocess.exception: ProcessException;
     /// ditto
     alias withEnv = setEnv;
 
+    /** Run process with new environment
+      * (do not inherit environment variables from parent process)
+      **/
+    auto ref setNewEnv() {
+        _config.flags |= std.process.Config.Flags.newEnv;
+        return this;
+    }
+
+    /// ditto
+    alias withNewEnv = setNewEnv;
+
     /** Set process configuration
       **/
     auto ref setConfig(in std.process.Config config) {
@@ -559,29 +570,25 @@ private import theprocess.exception: ProcessException;
             // Change working directory, when needed before executing the program
             std.file.chdir(_workdir);
 
-        if (!_env) {
-            /* Run the program, and in case when it could not be started for
-             * some reason, throw exception.
-             *
-             * For more info, see docs: https://dlang.org/library/std/process/execv.html
-             */
-            enforce!ProcessException(
-                std.process.execvp(_program, [_program] ~ _args) != -1,
-                "Cannot exec program %s".format(this));
-
-            /* This will not be executed in any way, because on success
-             * the current process will be replaced and on failure exception will be thrown.
-             * but add it here to make code look consistent.
-             */
-            return;
+        // Prepare environment variable for process
+        string[string] env;
+        if (_config.flags & std.process.Config.Flags.newEnv)
+            env = _env;
+        else {
+            // If we do not need new environment, then merge parent process
+            // environment with environment configured for process execution.
+            env = std.process.environment.toAA;
+            foreach(i; _env.byKeyValue)
+                env[i.key] = i.value;
         }
 
-        /* In case when we have environment specified, we have to
-         * call `execvpe` function, and thus we have to convert environment
-         * variables to format suitable for this function
-         * (array of strings in format `key=value`
-         */
-        string[] env_arr = _env.byKeyValue.map!(
+        /* We call `execvpe` function, thus we have to provide environment
+         * variables in format suitable for this function
+         * (array of strings in format `key=value`).
+         * If there is no environment required, then we just need to provide
+         * empty string.
+         **/
+        string[] env_arr = env.byKeyValue.map!(
             (i) => "%s=%s".format(i.key, i.value)
         ).array;
         enforce!ProcessException(
