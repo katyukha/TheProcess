@@ -9,6 +9,7 @@ private import std.stdio;
 private import std.exception;
 private import std.string: join;
 private import std.typecons;
+private import std.format: format;
 
 version(Posix) {
     private import core.sys.posix.unistd;
@@ -198,6 +199,47 @@ private import theprocess.exception: ProcessException;
         _program = program.toAbsolute.toString;
     }
 
+    /** Copy the process configuration. Could be useful when needed to run
+      * command multipe times with slightly different configuration.
+      * Returns new instance of process.
+      **/
+    Process copy() const {
+        Process res = Process(this._program);
+
+        res._config = this._config;
+
+        if (this._args)
+            res.setArgs(this._args);
+        if (this._env)
+            res.setEnv(this._env);
+        if (this._workdir)
+            res.inWorkDir(this._workdir);
+
+        version(Posix) {
+            res._uid = this._uid;
+            res._gid = this._gid;
+            res._original_uid = this._original_uid;
+            res._original_gid = this._original_gid;
+        }
+        return res;
+    }
+
+    /// Ensure that copy works
+    unittest {
+        import unit_threaded.assertions;
+
+        auto p = Process("some-test-program").withArgs("arg1", "arg2");
+        p._args.should == ["arg1", "arg2"];
+        // Check that result of set args return Process instance with new args
+        p.setArgs("arg3", "arg4")._args.should == ["arg3", "arg4"];
+        // Check that Process instance p was updated
+        p._args.should == ["arg3", "arg4"];
+
+        // Try to use copy() to ensure that original instance was not changed
+        p.copy().setArgs("arg5", "arg6")._args.should == ["arg5", "arg6"];
+        p._args.should == ["arg3", "arg4"];
+    }
+
     /** Return string representation of process to be started
       **/
     string toString() const {
@@ -274,7 +316,8 @@ private import theprocess.exception: ProcessException;
     /// ditto
     alias inWorkDir = setWorkDir;
 
-    /** Set environemnt for the process to be started
+    /** Set environemnt for the process to be started.
+      * Could be called multiple times to update environment.
       *
       * Params:
       *     env = associative array to update environment to run process with.
@@ -593,7 +636,7 @@ private import theprocess.exception: ProcessException;
         ).array;
         enforce!ProcessException(
             std.process.execvpe(_program, [_program] ~ _args, env_arr) != -1,
-            "Cannot exec program %s".format(this));
+            "Cannot exec program %s".format(this.toString));
     }
 }
 

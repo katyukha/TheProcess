@@ -1,9 +1,9 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"dshould": "1.7.1",
+		"dshould": "1.7.2",
 		"prettyprint": "1.0.9",
-		"thepath": "0.1.8",
-		"unit-threaded": "2.1.6"
+		"thepath": "2.0.0",
+		"unit-threaded": "2.2.0"
 	}
 }

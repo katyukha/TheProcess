@@ -1,5 +1,14 @@
 # Changelog
 
+## Release v0.0.6
+
+## Added
+- Added new method `copy` that could be used to copy process configuration before running.
+  This could be useful, for cases when we need to run same program multiple time
+  with similar configuration.
+
+---
+
 ## Release v0.0.5
 
 ### Added
