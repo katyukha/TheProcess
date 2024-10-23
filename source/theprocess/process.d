@@ -45,10 +45,10 @@ private import theprocess.exception: ProcessException;
             immutable string[] args,
             in int status,
             in string output) nothrow {
-        this._program = program;
+        this._program = program.idup;
         this._args = args;
         this.status = status;
-        this.output = output;
+        this.output = output.idup;
     }
 
     /** Check if status is Ok.
@@ -191,7 +191,7 @@ private import theprocess.exception: ProcessException;
       *     program = name of program to run or path of program to run
       **/
     this(in string program) {
-        _program = program;
+        _program = program.idup;
     }
 
     /// ditto
@@ -303,13 +303,13 @@ private import theprocess.exception: ProcessException;
       *
       **/
     auto ref setWorkDir(in string workdir) {
-        _workdir = workdir;
+        _workdir = workdir.idup;
         return this;
     }
 
     /// ditto
     auto ref setWorkDir(in Path workdir) {
-        _workdir = workdir.toString;
+        _workdir = workdir.toString.idup;
         return this;
     }
 
@@ -343,7 +343,7 @@ private import theprocess.exception: ProcessException;
       *
       **/
     auto ref setEnv(in string key, in string value) {
-        _env[key] = value;
+        _env[key.idup] = value.idup;
         return this;
     }
 
@@ -364,7 +364,7 @@ private import theprocess.exception: ProcessException;
     /** Set process configuration
       **/
     auto ref setConfig(in std.process.Config config) {
-        _config = config;
+        _config.flags = config.flags;
         return this;
     }
 
