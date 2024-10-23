@@ -1,8 +1,16 @@
 # Changelog
 
+## Release v0.0.7
+
+### Fixed
+
+- Fix `execv` method. Change uid and gid if needed before running process using execv.
+
+---
+
 ## Release v0.0.6
 
-## Added
+### Added
 - Added new method `copy` that could be used to copy process configuration before running.
   This could be useful, for cases when we need to run same program multiple time
   with similar configuration.

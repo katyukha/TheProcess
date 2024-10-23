@@ -609,8 +609,23 @@ private import theprocess.exception: ProcessException;
         import std.algorithm;
         import std.array;
 
+        if (!_gid.isNull && _gid.get != getgid) {
+            // Change rgid and egid if needed
+            errnoEnforce(
+                setregid(_gid.get, _gid.get) == 0,
+                "Cannot set real GID to %s before starting process: %s".format(
+                    _gid, this.toString));
+        }
+        if (!_uid.isNull && _uid.get != getuid) {
+            // Change ruid and euid if needed
+            errnoEnforce(
+                setreuid(_uid.get, _gid.get) == 0,
+                "Cannot set real UID to %s before starting process: %s".format(
+                    _uid, this.toString));
+        }
+
+        // Change working directory, when needed before executing the program
         if (_workdir)
-            // Change working directory, when needed before executing the program
             std.file.chdir(_workdir);
 
         // Prepare environment variable for process
