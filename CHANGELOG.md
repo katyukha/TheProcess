@@ -1,5 +1,13 @@
 # Changelog
 
+## Release v0.0.9
+
+### Fixed
+
+- Better handle case when system user does not exists in `.withUser` implementation.
+
+---
+
 ## Release v0.0.7
 
 ### Fixed

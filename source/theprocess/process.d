@@ -445,14 +445,28 @@ private import theprocess.exception: ProcessException;
          *     - pw_dir,
          *     - pw_shell,
          */
-        auto pw = getpwnam(username.toStringz);
+
+        import std.string: toStringz;
+        import core.stdc.errno: ENOENT, ESRCH, EBADF, EPERM;
+        passwd pwd;
+        passwd* result;
+        long bufsize = 16384;
+        char[] buf = new char[bufsize];
+
+        int s = getpwnam_r(username.toStringz, &pwd, &buf[0], bufsize, &result);
+        if (s == ENOENT || s == ESRCH || s == EBADF || s == EPERM || result is null)
+            // Such user does not exists
+            throw new ProcessException("User %s does not exists");
+
         errnoEnforce(
-            pw !is null,
+            s == 0,
             "Cannot get info about user %s".format(username));
-        setUID(pw.pw_uid);
-        setGID(pw.pw_gid);
+
+        setUID(result.pw_uid);
+        setGID(result.pw_gid);
         // TODO: add ability to automatically set user's home directory
         //       if needed
+
         return this;
     }
 
@@ -788,4 +802,40 @@ private import theprocess.exception: ProcessException;
     result.ensureOk(true, 42).shouldThrowWithMessage!ProcessException(
         "Program %s with args %s failed! Expected exit-code %s, got %s.\nOutput: %s".format(
             result._program, result._args, 42, 0, "Test out: Hello World, the Void"));
+}
+
+/// Test simple execution of the script with user (use current user)
+version(Posix) @safe unittest {
+    import std.string;
+    import std.ascii : newline;
+
+    import unit_threaded.assertions;
+
+    auto temp_root = createTempPath();
+    scope(exit) temp_root.remove();
+
+    import std.conv: octal;
+    auto script_path = temp_root.join("test-script.sh");
+    script_path.writeFile(
+        "#!" ~ nativeShell ~ newline ~
+        `echo "Test out: $1 $2"` ~ newline);
+    // Add permission to run this script
+    script_path.setAttributes(octal!755);
+
+    auto username = Process("whoami").execute.ensureOk(true).output.strip;
+
+    // Test the case when process executes fine
+    auto result = Process(script_path)
+        .withArgs("Hello", "World", "test")
+        .withUser(username)
+        .execute
+        .ensureOk;
+    result.status.should == 0;
+    result.output.chomp.should == "Test out: Hello World";
+    result.isOk.shouldBeTrue;
+    result.isNotOk.shouldBeFalse;
+    // When we expect different successful exit-code
+    result.isOk(42).shouldBeFalse;
+    result.isNotOk(42).shouldBeTrue;
+    result.ensureOk(42).shouldThrow!ProcessException;
 }
