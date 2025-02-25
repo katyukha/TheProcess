@@ -433,7 +433,7 @@ private import theprocess.exception: ProcessException;
       *     reference to this (process instance)
       *
       **/
-    version(Posix) auto ref setUser(in string username) @trusted {
+    version(Posix) auto ref setUser(in string username, in bool userWorkDir=false) @trusted {
         import std.string: toStringz;
 
         /* pw info has following fields:
@@ -446,7 +446,7 @@ private import theprocess.exception: ProcessException;
          *     - pw_shell,
          */
 
-        import std.string: toStringz;
+        import std.string: toStringz, fromStringz;
         import core.stdc.errno: ENOENT, ESRCH, EBADF, EPERM;
         passwd pwd;
         passwd* result;
@@ -462,10 +462,12 @@ private import theprocess.exception: ProcessException;
             s == 0,
             "Cannot get info about user %s".format(username));
 
-        setUID(result.pw_uid);
-        setGID(result.pw_gid);
-        // TODO: add ability to automatically set user's home directory
-        //       if needed
+        _uid = result.pw_uid;
+        _gid = result.pw_gid;
+
+        if (userWorkDir)
+            // TODO: Better error handling when pw_dir does not exists
+            _workdir = result.pw_dir.fromStringz.idup;
 
         return this;
     }
@@ -503,6 +505,9 @@ private import theprocess.exception: ProcessException;
               *       instead of real user, and update real user in
               *       child process.
               */
+
+            // TODO: It seems that in latest releases better preexec function was implemented
+            //       Check it, may be it have sense to use it.
             if (!_gid.isNull && _gid.get != getgid) {
                 _original_gid = getgid().nullable;
                 errnoEnforce(
@@ -838,4 +843,33 @@ version(Posix) @safe unittest {
     result.isOk(42).shouldBeFalse;
     result.isNotOk(42).shouldBeTrue;
     result.ensureOk(42).shouldThrow!ProcessException;
+}
+
+
+/// Test simple execution of the script within user's home directory
+version(Posix) @safe unittest {
+    import std.string;
+    import std.ascii : newline;
+
+    import unit_threaded.assertions;
+
+    // Change current working dir to /tmp
+    Path.tempDir.chdir;
+
+    string current_user = (() @trusted => getlogin.fromStringz.idup)();
+    auto workdir = Process("pwd")
+        .withUser(current_user)
+        .execute
+        .ensureOk(true)
+        .output.strip;
+
+    Path(workdir).toAbsolute.should == Path.tempDir.toAbsolute;
+
+    workdir = Process("pwd")
+        .withUser(current_user, true)
+        .execute
+        .ensureOk(true)
+        .output.strip;
+
+    Path(workdir).toAbsolute.should == Path("~").toAbsolute;
 }

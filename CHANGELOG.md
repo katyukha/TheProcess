@@ -1,5 +1,13 @@
 # Changelog
 
+## Release v0.0.10
+
+### Added
+
+- Process.withUser now has extra param `userWorkDir` - if set to True, then command will be executed within user's home directory.
+
+---
+
 ## Release v0.0.9
 
 ### Fixed
