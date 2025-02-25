@@ -456,7 +456,7 @@ private import theprocess.exception: ProcessException;
         int s = getpwnam_r(username.toStringz, &pwd, &buf[0], bufsize, &result);
         if (s == ENOENT || s == ESRCH || s == EBADF || s == EPERM || result is null)
             // Such user does not exists
-            throw new ProcessException("User %s does not exists");
+            throw new ProcessException("User %s does not exists".format(username));
 
         errnoEnforce(
             s == 0,
