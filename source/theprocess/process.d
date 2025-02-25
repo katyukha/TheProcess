@@ -856,7 +856,7 @@ version(Posix) @safe unittest {
     // Change current working dir to /tmp
     Path.tempDir.chdir;
 
-    string current_user = (() @trusted => getlogin.fromStringz.idup)();
+    auto current_user = Process("whoami").execute.ensureOk(true).output.strip;
     auto workdir = Process("pwd")
         .withUser(current_user)
         .execute
