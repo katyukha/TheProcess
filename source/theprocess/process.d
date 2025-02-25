@@ -863,7 +863,7 @@ version(Posix) @safe unittest {
         .ensureOk(true)
         .output.strip;
 
-    Path(workdir).toAbsolute.should == Path.tempDir.toAbsolute;
+    Path(workdir).realPath.should == Path.tempDir.realPath;
 
     workdir = Process("pwd")
         .withUser(current_user, true)
@@ -871,5 +871,5 @@ version(Posix) @safe unittest {
         .ensureOk(true)
         .output.strip;
 
-    Path(workdir).toAbsolute.should == Path("~").toAbsolute;
+    Path(workdir).realPath.should == Path("~").realPath;
 }
