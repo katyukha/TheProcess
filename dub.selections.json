@@ -3,7 +3,7 @@
 	"versions": {
 		"dshould": "1.7.2",
 		"prettyprint": "1.0.9",
-		"thepath": "2.0.0",
-		"unit-threaded": "2.2.0"
+		"thepath": "2.1.0",
+		"unit-threaded": "2.2.1"
 	}
 }
