@@ -387,6 +387,17 @@ private import theprocess.exception: ProcessException;
     /// ditto
     alias withFlag = setFlag;
 
+    /** Apply Config.stderrPassThrough flag.
+      * With this flag, stderr will not be captured,
+      * but instead directly passed to console or terminal.
+      **/
+    auto ref setStderrPassThrough() {
+        return setFlag(std.process.Config.stderrPassThrough);
+    }
+
+    /// ditto
+    alias withStderrPassThrough = setStderrPassThrough;
+
     /** Set UID to run process with
       *
       * Params:
