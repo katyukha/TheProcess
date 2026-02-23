@@ -30,6 +30,12 @@ private import thepath;
             continue;
 
         // TODO: check with lstat if link is not broken
+        version(Posix) {
+            import core.sys.posix.sys.stat: S_IXUSR, S_IXGRP, S_IXOTH;
+            if (!(sys_program_path.getAttributes() & (S_IXUSR | S_IXGRP | S_IXOTH)))
+                continue;
+        }
+
         return sys_program_path.nullable;
     }
     return Nullable!Path.init;

@@ -589,13 +589,13 @@ private import theprocess.exception: ProcessException;
       **/
     auto execute(in size_t max_output=size_t.max) {
         setUpProcess();
+        scope(exit) tearDownProcess();
         auto res = std.process.execute(
             [_program] ~ _args,
             _env,
             _config,
             max_output,
             _workdir);
-        tearDownProcess();
         return ProcessResult(_program, _args.idup, res.status, res.output);
     }
 
@@ -604,6 +604,7 @@ private import theprocess.exception: ProcessException;
                File stdout=std.stdio.stdout,
                File stderr=std.stdio.stderr) {
         setUpProcess();
+        scope(exit) tearDownProcess();
         auto res = std.process.spawnProcess(
             [_program] ~ _args,
             stdin,
@@ -612,20 +613,19 @@ private import theprocess.exception: ProcessException;
             _env,
             _config,
             _workdir);
-        tearDownProcess();
         return res;
     }
 
     /// Pipe process
     auto pipe(in Redirect redirect=Redirect.all) {
         setUpProcess();
+        scope(exit) tearDownProcess();
         auto res = std.process.pipeProcess(
             [_program] ~ _args,
             redirect,
             _env,
             _config,
             _workdir);
-        tearDownProcess();
         return res;
     }
 
@@ -649,7 +649,7 @@ private import theprocess.exception: ProcessException;
         if (!_uid.isNull && _uid.get != getuid) {
             // Change ruid and euid if needed
             errnoEnforce(
-                setreuid(_uid.get, _gid.get) == 0,
+                setreuid(_uid.get, _uid.get) == 0,
                 "Cannot set real UID to %s before starting process: %s".format(
                     _uid, this.toString));
         }
