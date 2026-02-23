@@ -563,17 +563,23 @@ private import theprocess.exception: ProcessException;
     /// Called after process started to run post-exec hooks;
     private void tearDownProcess() {
         version(Posix) {
-            // Restore original uid/gid after process started.
-            if (!_original_gid.isNull)
+            // Restore original uid/gid after process started, then clear
+            // the saved values so re-running this Process is safe.
+            if (!_original_gid.isNull) {
                 errnoEnforce(
                     setregid(_original_gid.get, -1) == 0,
                     "Cannot restore real GID to %s after process started: %s".format(
                         _original_gid, this.toString));
-            if (!_original_uid.isNull)
+                _original_gid.nullify();
+            }
+            if (!_original_uid.isNull) {
                 errnoEnforce(
                     setreuid(_original_uid.get, -1) == 0,
                     "Cannot restore real UID to %s after process started: %s".format(
                         _original_uid, this.toString));
+                _original_uid.nullify();
+            }
+            _config.preExecFunction = null;
         }
     }
 
