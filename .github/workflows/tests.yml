@@ -10,7 +10,7 @@ jobs:
         dc: [dmd-latest, ldc-latest, dmd-2.109.1, ldc-1.39.0]
         include:
           - os: macOS-latest
-            dc: ldc-1.39.0
+            dc: ldc-1.41.0
           - os: macOS-latest
             dc: ldc-latest
 
