@@ -9,6 +9,18 @@
   return a **new `Process` by value** instead of mutating the current instance.
   Previously they were plain aliases for the corresponding `set*` methods.
   Use `set*` / `add*` methods when in-place mutation is intended.
+- `set*` methods (`setArgs`, `setWorkDir`, `setEnv`, `setNewEnv`, `setConfig`, `setFlag`,
+  `setStderrPassThrough`, `setUID`, `setGID`, `setUser`) now return `void` instead of
+  `ref this`. Chaining `set*` calls is no longer possible; use `with*` / `in*` methods
+  for chained configuration instead.
+- `addArgs` now returns `void` instead of `ref this`. Replace uses of `addArgs` inside
+  chains with the new `withAddedArgs` method.
+
+### Added
+
+- New method `withAddedArgs` — the copy-returning counterpart to `addArgs`. Returns a new
+  `Process` with the given arguments appended, leaving the original unchanged. Use this
+  in place of `addArgs` when building chains.
 
 ### Fixed
 
