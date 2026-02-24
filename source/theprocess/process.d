@@ -387,6 +387,17 @@ private import theprocess.exception: ProcessException;
     /// ditto
     alias withFlag = setFlag;
 
+    /** Apply Config.stderrPassThrough flag.
+      * With this flag, stderr will not be captured,
+      * but instead directly passed to console or terminal.
+      **/
+    auto ref setStderrPassThrough() {
+        return setFlag(std.process.Config.stderrPassThrough);
+    }
+
+    /// ditto
+    alias withStderrPassThrough = setStderrPassThrough;
+
     /** Set UID to run process with
       *
       * Params:
@@ -552,17 +563,23 @@ private import theprocess.exception: ProcessException;
     /// Called after process started to run post-exec hooks;
     private void tearDownProcess() {
         version(Posix) {
-            // Restore original uid/gid after process started.
-            if (!_original_gid.isNull)
+            // Restore original uid/gid after process started, then clear
+            // the saved values so re-running this Process is safe.
+            if (!_original_gid.isNull) {
                 errnoEnforce(
                     setregid(_original_gid.get, -1) == 0,
                     "Cannot restore real GID to %s after process started: %s".format(
                         _original_gid, this.toString));
-            if (!_original_uid.isNull)
+                _original_gid.nullify();
+            }
+            if (!_original_uid.isNull) {
                 errnoEnforce(
                     setreuid(_original_uid.get, -1) == 0,
                     "Cannot restore real UID to %s after process started: %s".format(
                         _original_uid, this.toString));
+                _original_uid.nullify();
+            }
+            _config.preExecFunction = null;
         }
     }
 
@@ -578,13 +595,13 @@ private import theprocess.exception: ProcessException;
       **/
     auto execute(in size_t max_output=size_t.max) {
         setUpProcess();
+        scope(exit) tearDownProcess();
         auto res = std.process.execute(
             [_program] ~ _args,
             _env,
             _config,
             max_output,
             _workdir);
-        tearDownProcess();
         return ProcessResult(_program, _args.idup, res.status, res.output);
     }
 
@@ -593,6 +610,7 @@ private import theprocess.exception: ProcessException;
                File stdout=std.stdio.stdout,
                File stderr=std.stdio.stderr) {
         setUpProcess();
+        scope(exit) tearDownProcess();
         auto res = std.process.spawnProcess(
             [_program] ~ _args,
             stdin,
@@ -601,20 +619,19 @@ private import theprocess.exception: ProcessException;
             _env,
             _config,
             _workdir);
-        tearDownProcess();
         return res;
     }
 
     /// Pipe process
     auto pipe(in Redirect redirect=Redirect.all) {
         setUpProcess();
+        scope(exit) tearDownProcess();
         auto res = std.process.pipeProcess(
             [_program] ~ _args,
             redirect,
             _env,
             _config,
             _workdir);
-        tearDownProcess();
         return res;
     }
 
@@ -638,7 +655,7 @@ private import theprocess.exception: ProcessException;
         if (!_uid.isNull && _uid.get != getuid) {
             // Change ruid and euid if needed
             errnoEnforce(
-                setreuid(_uid.get, _gid.get) == 0,
+                setreuid(_uid.get, _uid.get) == 0,
                 "Cannot set real UID to %s before starting process: %s".format(
                     _uid, this.toString));
         }

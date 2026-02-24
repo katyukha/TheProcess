@@ -16,3 +16,4 @@ theprocess-test-*
 *.lst
 *.sw[npo]
 /build
+/dub.selections.json
