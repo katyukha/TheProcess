@@ -133,11 +133,13 @@ private import theprocess.exception: ProcessException;
   * 3. Run one of `execute`, `spawn` or `pipe` methods, that will actually
   *    start the process.
   *
-  * Configuration methods are usually prefixed with `set` word, but they
-  * may also have semantic aliases. For example, the method `setArgs` also has
-  * an alias `withArgs`, and the method `setWorkDir` has an alias `inWorkDir`.
-  * Additionally, configuration methods always
-  * return the reference to current instance of the Process being configured.
+  * Configuration methods come in two families with distinct semantics:
+  *
+  * - `set*` / `add*` methods mutate the current instance in place and return
+  *   a `ref` to it, making them suitable for conditional modification of an
+  *   already-stored `Process` variable.
+  * - `with*` / `in*` methods return a new `Process` by value, leaving the
+  *   original unchanged, making them safe to use in chained expressions.
   *
   * Examples:
   * ---
@@ -213,7 +215,7 @@ private import theprocess.exception: ProcessException;
         if (this._env)
             res.setEnv(this._env);
         if (this._workdir)
-            res.inWorkDir(this._workdir);
+            res.setWorkDir(this._workdir);
 
         version(Posix) {
             res._uid = this._uid;
@@ -224,18 +226,23 @@ private import theprocess.exception: ProcessException;
         return res;
     }
 
-    /// Ensure that copy works
+    /// Ensure that copy, setArgs, and withArgs work correctly
     unittest {
         import unit_threaded.assertions;
 
         auto p = Process("some-test-program").withArgs("arg1", "arg2");
         p._args.should == ["arg1", "arg2"];
-        // Check that result of set args return Process instance with new args
+
+        // setArgs mutates in place and returns ref to the same instance
         p.setArgs("arg3", "arg4")._args.should == ["arg3", "arg4"];
-        // Check that Process instance p was updated
         p._args.should == ["arg3", "arg4"];
 
-        // Try to use copy() to ensure that original instance was not changed
+        // withArgs returns a new Process without modifying the original
+        auto p2 = p.withArgs("arg5", "arg6");
+        p2._args.should == ["arg5", "arg6"];
+        p._args.should == ["arg3", "arg4"];
+
+        // copy() + setArgs is equivalent to withArgs
         p.copy().setArgs("arg5", "arg6")._args.should == ["arg5", "arg6"];
         p._args.should == ["arg3", "arg4"];
     }
@@ -260,8 +267,12 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
-    /// ditto
-    alias withArgs = setArgs;
+    /** Return a new Process with arguments set to the provided values,
+      * leaving the original unchanged.
+      **/
+    Process withArgs(in string[] args...) const {
+        return this.copy().setArgs(args);
+    }
 
     /** Add arguments to the process.
       *
@@ -313,8 +324,17 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
+    /** Return a new Process with the working directory set to the provided
+      * path, leaving the original unchanged.
+      **/
+    Process inWorkDir(in string workdir) const {
+        return this.copy().setWorkDir(workdir);
+    }
+
     /// ditto
-    alias inWorkDir = setWorkDir;
+    Process inWorkDir(in Path workdir) const {
+        return this.copy().setWorkDir(workdir);
+    }
 
     /** Set environemnt for the process to be started.
       * Could be called multiple times to update environment.
@@ -347,8 +367,17 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
+    /** Return a new Process with the environment updated with the provided
+      * key-value pairs, leaving the original unchanged.
+      **/
+    Process withEnv(in string[string] env) const {
+        return this.copy().setEnv(env);
+    }
+
     /// ditto
-    alias withEnv = setEnv;
+    Process withEnv(in string key, in string value) const {
+        return this.copy().setEnv(key, value);
+    }
 
     /** Run process with new environment
       * (do not inherit environment variables from parent process)
@@ -358,8 +387,13 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
-    /// ditto
-    alias withNewEnv = setNewEnv;
+    /** Return a new Process configured to start with a fresh environment
+      * (not inheriting parent environment variables), leaving the original
+      * unchanged.
+      **/
+    Process withNewEnv() const {
+        return this.copy().setNewEnv();
+    }
 
     /** Set process configuration
       **/
@@ -368,8 +402,12 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
-    /// ditto
-    alias withConfig = setConfig;
+    /** Return a new Process with the process configuration set to the
+      * provided value, leaving the original unchanged.
+      **/
+    Process withConfig(in std.process.Config config) const {
+        return this.copy().setConfig(config);
+    }
 
     /** Set configuration flag for process to be started
       **/
@@ -384,8 +422,17 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
+    /** Return a new Process with the given configuration flag set,
+      * leaving the original unchanged.
+      **/
+    Process withFlag(in std.process.Config.Flags flag) const {
+        return this.copy().setFlag(flag);
+    }
+
     /// ditto
-    alias withFlag = setFlag;
+    Process withFlag(in std.process.Config flags) const {
+        return this.copy().setFlag(flags);
+    }
 
     /** Apply Config.stderrPassThrough flag.
       * With this flag, stderr will not be captured,
@@ -395,8 +442,12 @@ private import theprocess.exception: ProcessException;
         return setFlag(std.process.Config.stderrPassThrough);
     }
 
-    /// ditto
-    alias withStderrPassThrough = setStderrPassThrough;
+    /** Return a new Process with Config.stderrPassThrough set,
+      * leaving the original unchanged.
+      **/
+    Process withStderrPassThrough() const {
+        return withFlag(std.process.Config.stderrPassThrough);
+    }
 
     /** Set UID to run process with
       *
@@ -412,8 +463,12 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
-    /// ditto
-    version(Posix) alias withUID = setUID;
+    /** Return a new Process configured to run with the given UID,
+      * leaving the original unchanged.
+      **/
+    version(Posix) Process withUID(in uid_t uid) const {
+        return this.copy().setUID(uid);
+    }
 
     /** Set GID to run process with
       *
@@ -429,8 +484,12 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
-    /// ditto
-    version(Posix) alias withGID = setGID;
+    /** Return a new Process configured to run with the given GID,
+      * leaving the original unchanged.
+      **/
+    version(Posix) Process withGID(in gid_t gid) const {
+        return this.copy().setGID(gid);
+    }
 
     /** Run process as specified user
       *
@@ -483,8 +542,13 @@ private import theprocess.exception: ProcessException;
         return this;
     }
 
-    ///
-    version(Posix) alias withUser = setUser;
+    /** Return a new Process configured to run as the given user,
+      * leaving the original unchanged.
+      **/
+    version(Posix) Process withUser(
+            in string username, in bool userWorkDir=false) @trusted const {
+        return this.copy().setUser(username, userWorkDir);
+    }
 
     /// Called before running process to run pre-exec hooks;
     private void setUpProcess() {

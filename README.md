@@ -21,6 +21,31 @@ thus it allows to easily use complex logic to prepare arguments and env for exte
 
 ---
 
+## Configuration methods
+
+Process configuration methods come in two families:
+
+- **`set*` / `add*`** — mutate the current instance in place and return a `ref` to it.
+  Use these when you have a stored `Process` variable that you want to modify conditionally.
+
+```d
+auto runner = Process("my-program").withArgs("--base-arg");
+if (condition)
+    runner.addArgs("--extra-arg");  // mutates runner in place
+runner.execute;
+```
+
+- **`with*` / `in*`** — return a **new** `Process` by value, leaving the original unchanged.
+  Safe to use in chained expressions or when deriving variants from a shared base.
+
+```d
+// Each call returns a fresh Process; the original is never modified
+auto result = Process("my-program")
+    .withArgs("--verbose")
+    .inWorkDir("/my/work/dir")
+    .execute;
+```
+
 ## Examples
 
 Simply execute the program:
