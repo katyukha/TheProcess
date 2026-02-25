@@ -315,6 +315,78 @@ private import theprocess.exception: ProcessException;
         return result;
     }
 
+    /** Append a single argument, returning a new Process (non-mutating).
+      * Equivalent to withAddedArgs.
+      *
+      * Examples:
+      * ---
+      * auto git = Process("git").withArgs("--git-dir", myPath);
+      * (git ~ "clone" ~ url).execute.ensureOk;
+      * ---
+      **/
+    Process opBinary(string op)(in string arg) const if (op == "~") {
+        return this.withAddedArgs(arg);
+    }
+
+    /** Append multiple arguments, returning a new Process (non-mutating).
+      * Equivalent to withAddedArgs.
+      *
+      * Examples:
+      * ---
+      * auto git = Process("git").withArgs("--git-dir", myPath);
+      * (git ~ ["clone", url]).execute.ensureOk;
+      * ---
+      **/
+    Process opBinary(string op)(in string[] args) const if (op == "~") {
+        return this.withAddedArgs(args);
+    }
+
+    /** Append a single argument in place (mutating).
+      * Equivalent to addArgs.
+      **/
+    void opOpAssign(string op)(in string arg) if (op == "~") {
+        this.addArgs(arg);
+    }
+
+    /** Append multiple arguments in place (mutating).
+      * Equivalent to addArgs.
+      **/
+    void opOpAssign(string op)(in string[] args) if (op == "~") {
+        this.addArgs(args);
+    }
+
+    /// Ensure that ~ and ~= work correctly
+    unittest {
+        import unit_threaded.assertions;
+
+        auto p = Process("git").withArgs("--git-dir", "/my/path");
+
+        // ~ with single string returns new Process, original unchanged
+        auto p2 = p ~ "clone";
+        p2._args.should == ["--git-dir", "/my/path", "clone"];
+        p._args.should == ["--git-dir", "/my/path"];
+
+        // ~ with string[] returns new Process, original unchanged
+        auto p3 = p ~ ["clone", "https://example.com"];
+        p3._args.should == ["--git-dir", "/my/path", "clone", "https://example.com"];
+        p._args.should == ["--git-dir", "/my/path"];
+
+        // ~ chains correctly
+        auto p4 = p ~ "clone" ~ "https://example.com";
+        p4._args.should == ["--git-dir", "/my/path", "clone", "https://example.com"];
+        p._args.should == ["--git-dir", "/my/path"];
+
+        // ~= with single string mutates in place
+        auto p5 = p.copy();
+        p5 ~= "status";
+        p5._args.should == ["--git-dir", "/my/path", "status"];
+
+        // ~= with string[] mutates in place
+        auto p6 = p.copy();
+        p6 ~= ["log", "--oneline"];
+        p6._args.should == ["--git-dir", "/my/path", "log", "--oneline"];
+    }
+
     /** Set work directory for the process to be started
       *
       * Params:
