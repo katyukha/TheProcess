@@ -85,9 +85,8 @@ version(Posix) unittest {
         if (kill(pid, 0) == 0) return true;
         return errno != ESRCH;
     } else version(Windows) {
-        import core.sys.windows.winbase : OpenProcess, CloseHandle, GetExitCodeProcess;
-        import core.sys.windows.winnt : PROCESS_QUERY_INFORMATION, STILL_ACTIVE;
-        import core.sys.windows.basetsd : DWORD;
+        import core.sys.windows.winbase : OpenProcess, CloseHandle, GetExitCodeProcess, STILL_ACTIVE;
+        import core.sys.windows.winnt : PROCESS_QUERY_INFORMATION, DWORD;
 
         auto handle = OpenProcess(PROCESS_QUERY_INFORMATION, false, cast(DWORD) pid);
         if (handle is null) return false;
