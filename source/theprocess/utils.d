@@ -13,6 +13,8 @@ private import std.typecons;
 
 private import thepath;
 
+version(Posix) private import core.sys.posix.sys.types: uid_t, gid_t;
+
 
 /** Resolve program name according to system path
   *
@@ -120,14 +122,29 @@ unittest {
 }
 
 
-/** Check if system user with specified name exists
+/** D-friendly representation of a system user (passwd entry).
+  *
+  * Obtained via $(LREF getSystemUser) or $(LREF getCurrentUser).
+  **/
+version(Posix) struct SystemUser {
+    string name;     /// Login name
+    uid_t  uid;      /// User ID
+    gid_t  gid;      /// Primary group ID
+    string homeDir;  /// Home directory path
+    string shell;    /// Login shell path
+}
+
+
+/** Look up a system user by name.
   *
   * Params:
-  *     username = name of user to check if exists
+  *     username = login name to look up
   * Returns:
-  *     True if such user exists, otherwise false.
+  *     Nullable!SystemUser — null if no such user exists.
+  * Throws:
+  *     Exception on unexpected errors from getpwnam_r.
   **/
-version(Posix) @trusted bool systemUserExists(in string username) {
+version(Posix) @trusted Nullable!SystemUser getSystemUser(in string username) {
     import core.sys.posix.pwd: getpwnam_r, passwd;
     import std.string: toStringz, fromStringz;
     import core.stdc.errno: ENOENT, ESRCH, EBADF, EPERM;
@@ -140,14 +157,118 @@ version(Posix) @trusted bool systemUserExists(in string username) {
 
     int s = getpwnam_r(username.toStringz, &pwd, &buf[0], bufsize, &result);
     if (s == ENOENT || s == ESRCH || s == EBADF || s == EPERM || result is null)
-        return false;
+        return Nullable!SystemUser.init;
 
     if (s != 0)
         throw new Exception(
-            "Got error on attempt to check if user %s exists: %s"
+            "Got error on attempt to get user %s: %s"
             .format(username, strerror(s).fromStringz));
 
-    return true;
+    return SystemUser(
+        pwd.pw_name.fromStringz.idup,
+        pwd.pw_uid,
+        pwd.pw_gid,
+        pwd.pw_dir.fromStringz.idup,
+        pwd.pw_shell.fromStringz.idup,
+    ).nullable;
+}
+
+
+///
+version(Posix) unittest {
+    import unit_threaded.assertions;
+
+    auto root = getSystemUser("root");
+    root.isNull.shouldBeFalse;
+    root.get.name.shouldEqual("root");
+    root.get.uid.shouldEqual(0);
+
+    getSystemUser("this_user_definitely_does_not_exist_xyzzy").isNull.shouldBeTrue;
+}
+
+
+/** Return the SystemUser entry for the current effective user.
+  *
+  * Returns:
+  *     SystemUser for the calling process's effective UID.
+  * Throws:
+  *     Exception if the entry cannot be found or an error occurs.
+  **/
+version(Posix) @trusted SystemUser getCurrentUser() {
+    import core.sys.posix.pwd: getpwuid_r, passwd;
+    import core.sys.posix.unistd: geteuid;
+    import std.string: fromStringz;
+    import core.stdc.string: strerror;
+
+    passwd pwd;
+    passwd* result;
+    size_t bufsize = 16384;
+    char[] buf = new char[bufsize];
+
+    int s = getpwuid_r(geteuid(), &pwd, &buf[0], bufsize, &result);
+    if (s != 0)
+        throw new Exception(
+            "Got error on attempt to get current user: %s"
+            .format(strerror(s).fromStringz));
+    if (result is null)
+        throw new Exception("Current user not found in password database");
+
+    return SystemUser(
+        pwd.pw_name.fromStringz.idup,
+        pwd.pw_uid,
+        pwd.pw_gid,
+        pwd.pw_dir.fromStringz.idup,
+        pwd.pw_shell.fromStringz.idup,
+    );
+}
+
+
+///
+version(Posix) unittest {
+    import unit_threaded.assertions;
+    import core.sys.posix.unistd: geteuid;
+
+    auto user = getCurrentUser();
+    user.uid.shouldEqual(geteuid());
+}
+
+
+/** Check whether username matches the current effective user.
+  *
+  * Compares the uid of the named user against the process's effective UID,
+  * so it works correctly in setuid scenarios.
+  *
+  * Params:
+  *     username = login name to compare against
+  * Returns:
+  *     true if the user exists and their uid equals geteuid().
+  **/
+version(Posix) @trusted bool isCurrentUser(in string username) {
+    import core.sys.posix.unistd: geteuid;
+
+    auto u = getSystemUser(username);
+    return !u.isNull && u.get.uid == geteuid();
+}
+
+
+///
+version(Posix) unittest {
+    import unit_threaded.assertions;
+
+    isCurrentUser(getCurrentUser().name).shouldBeTrue;
+    isCurrentUser("this_user_definitely_does_not_exist_xyzzy").shouldBeFalse;
+}
+
+
+/** Check if system user with specified name exists
+  *
+  * Params:
+  *     username = name of user to check if exists
+  * Returns:
+  *     True if such user exists, otherwise false.
+  **/
+version(Posix) @trusted bool systemUserExists(in string username) {
+    return !getSystemUser(username).isNull;
 }
 
 

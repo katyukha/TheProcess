@@ -13,7 +13,6 @@ private import std.format: format;
 
 version(Posix) {
     private import core.sys.posix.unistd;
-    private import core.sys.posix.pwd;
 }
 
 private import thepath;
@@ -576,40 +575,15 @@ private import theprocess.exception: ProcessException;
       *     username = login of user to run process as
       **/
     version(Posix) void setUser(in string username, in bool userWorkDir=false) @trusted {
-        import std.string: toStringz;
+        auto user = getSystemUser(username);
+        if (user.isNull)
+            throw new ProcessException("User %s does not exist".format(username));
 
-        /* pw info has following fields:
-         *     - pw_name,
-         *     - pw_passwd,
-         *     - pw_uid,
-         *     - pw_gid,
-         *     - pw_gecos,
-         *     - pw_dir,
-         *     - pw_shell,
-         */
-
-        import std.string: toStringz, fromStringz;
-        import core.stdc.errno: ENOENT, ESRCH, EBADF, EPERM;
-        passwd pwd;
-        passwd* result;
-        long bufsize = 16384;
-        char[] buf = new char[bufsize];
-
-        int s = getpwnam_r(username.toStringz, &pwd, &buf[0], bufsize, &result);
-        if (s == ENOENT || s == ESRCH || s == EBADF || s == EPERM || result is null)
-            // Such user does not exists
-            throw new ProcessException("User %s does not exists".format(username));
-
-        errnoEnforce(
-            s == 0,
-            "Cannot get info about user %s".format(username));
-
-        _uid = result.pw_uid;
-        _gid = result.pw_gid;
+        _uid = user.get.uid;
+        _gid = user.get.gid;
 
         if (userWorkDir)
-            // TODO: Better error handling when pw_dir does not exists
-            _workdir = result.pw_dir.fromStringz.idup;
+            _workdir = user.get.homeDir;
     }
 
     /** Return a new Process configured to run as the given user,
