@@ -14,13 +14,15 @@
   `ref this`. Chaining `set*` calls is no longer possible; use `with*` / `in*` methods
   for chained configuration instead.
 - `addArgs` now returns `void` instead of `ref this`. Replace uses of `addArgs` inside
-  chains with the new `withAddedArgs` method.
+  chains with `withArgs` (which now appends rather than replaces).
+- `withArgs` semantics changed: it now **appends** the provided arguments to a copy of
+  the process instead of replacing the argument list. To replace args on a stored variable,
+  call `setArgs` directly.
 
 ### Added
 
-- New method `withAddedArgs` — the copy-returning counterpart to `addArgs`. Returns a new
-  `Process` with the given arguments appended, leaving the original unchanged. Use this
-  in place of `addArgs` when building chains.
+- `~` / `~=` operator overloads for `Process`: `p ~ "arg"` or `p ~ ["a", "b"]` returns a
+  new `Process` with arguments appended (non-mutating); `p ~= "arg"` appends in place.
 
 ### Fixed
 

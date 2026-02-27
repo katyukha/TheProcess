@@ -25,7 +25,7 @@ thus it allows to easily use complex logic to prepare arguments and env for exte
 
 Process configuration methods come in two families:
 
-- **`set*` / `add*`** — mutate the current instance in place and return a `ref` to it.
+- **`set*` / `add*`** — mutate the current instance in place and return `void`.
   Use these when you have a stored `Process` variable that you want to modify conditionally.
 
 ```d
