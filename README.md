@@ -134,6 +134,77 @@ if (!detach)
 ```
 
 
+## Running as a different user (Posix)
+
+On Posix systems a `Process` can be run as a different user by name or by explicit uid/gid:
+
+```d
+// Run as a named user
+Process("my-program")
+    .withUser("deploy")
+    .execute
+    .ensureOk;
+
+// Also switch the working directory to the user's home directory
+Process("my-program")
+    .withUser("deploy", true)
+    .execute
+    .ensureOk;
+
+// Or set uid/gid directly
+Process("my-program")
+    .withUID(1001)
+    .withGID(1001)
+    .execute
+    .ensureOk;
+```
+
+## Utilities
+
+### Checking whether a process is running
+
+```d
+import theprocess: isProcessRunning;
+
+if (isProcessRunning(pid.processID))
+    writeln("still running");
+```
+
+Works on Posix (via `kill(pid, 0)`) and Windows (via `GetExitCodeProcess`).
+
+### Resolving a program from PATH
+
+```d
+import theprocess: resolveProgram;
+
+auto path = resolveProgram("git");
+if (!path.isNull)
+    writeln("git is at: ", path.get);
+```
+
+### System user utilities (Posix)
+
+```d
+import theprocess: SystemUser, getSystemUser, getCurrentUser,
+                   isCurrentUser, systemUserExists;
+
+// Look up a user by name — returns null if not found
+Nullable!SystemUser user = getSystemUser("deploy");
+if (!user.isNull)
+    writeln(user.get.uid, " ", user.get.homeDir);
+
+// Get the current effective user
+SystemUser me = getCurrentUser();
+
+// Decide whether a user switch is needed
+if (!isCurrentUser("deploy"))
+    Process("myapp").withUser("deploy").spawn();
+
+// Simple existence check
+if (systemUserExists("postgres"))
+    writeln("postgres user is present");
+```
+
 ## License
 
 This library is licensed under MPL-2.0 license

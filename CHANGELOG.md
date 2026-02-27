@@ -1,6 +1,6 @@
 # Changelog
 
-## Release v0.0.11
+## Release v0.1.0
 
 ### Breaking
 
@@ -23,6 +23,17 @@
 
 - `~` / `~=` operator overloads for `Process`: `p ~ "arg"` or `p ~ ["a", "b"]` returns a
   new `Process` with arguments appended (non-mutating); `p ~= "arg"` appends in place.
+- `isProcessRunning(int pid)` — cross-platform check whether a process with the given PID
+  is currently running. Uses `kill(pid, 0)` on Posix and `GetExitCodeProcess` on Windows.
+- `SystemUser` struct (Posix only) — D-friendly representation of a passwd entry, with fields
+  `name`, `uid`, `gid`, `homeDir`, and `shell`.
+- `getSystemUser(string) → Nullable!SystemUser` (Posix only) — look up a system user by name
+  via `getpwnam_r`; returns null if the user does not exist, throws on unexpected errors.
+- `getCurrentUser() → SystemUser` (Posix only) — returns the `SystemUser` for the current
+  effective user (uses `getpwuid_r(geteuid())`).
+- `isCurrentUser(string) → bool` (Posix only) — returns true if the named user's uid matches
+  the current effective UID; useful for deciding whether a user switch is necessary.
+- `systemUserExists(string) → bool` (Posix only) — convenience wrapper over `getSystemUser`.
 
 ### Fixed
 
@@ -35,6 +46,9 @@
 - `_original_uid`, `_original_gid`, and `preExecFunction` were not cleared after
   `tearDownProcess` ran, causing stale state that could incorrectly mutate the parent
   process credentials on a subsequent call to `execute`/`spawn`/`pipe` on the same instance.
+- `setUser` / `withUser`: the internal `getpwnam_r` call used a signed `long` buffer length
+  (should be `size_t`) and reported errors using the global `errno` instead of the return
+  value of `getpwnam_r`. Both fixed by delegating to the new `getSystemUser`.
 
 ---
 
