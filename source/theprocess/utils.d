@@ -71,8 +71,7 @@ version(Posix) unittest {
   * function returns false (process absent or inaccessible).
   *
   * Params:
-  *     pid = OS-level process identifier.  Obtain it from
-  *           std.process.Pid.processID or any other source.
+  *     pid = OS-level process identifier as a raw integer.
   *
   * Returns:
   *     true if the process appears to be running, false otherwise.
@@ -99,6 +98,20 @@ version(Posix) unittest {
     }
 }
 
+/** Check whether a process is currently running.
+  *
+  * Overload accepting a $(D std.process.Pid) directly.
+  *
+  * Params:
+  *     pid = Pid handle returned by spawnProcess or similar.
+  *
+  * Returns:
+  *     true if the process appears to be running, false otherwise.
+  **/
+@trusted bool isProcessRunning(Pid pid) nothrow {
+    return isProcessRunning(pid.processID);
+}
+
 
 /// isProcessRunning returns true for a live process and false after it exits
 unittest {
@@ -113,11 +126,13 @@ unittest {
     int rawPid = pid.processID;
 
     isProcessRunning(rawPid).shouldBeTrue;
+    isProcessRunning(pid).shouldBeTrue;
 
     pid.kill();
     pid.wait();
 
     isProcessRunning(rawPid).shouldBeFalse;
+    isProcessRunning(pid).shouldBeFalse;
 }
 
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## Release v0.1.1
+
+### Added
+
+- `isProcessRunning(Pid)` overload — accepts a `std.process.Pid` directly, delegating to
+  the `int` overload via `pid.processID`.
+
+---
+
 ## Release v0.1.0
 
 ### Breaking
