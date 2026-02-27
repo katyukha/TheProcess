@@ -140,8 +140,8 @@ private import theprocess.exception: ProcessException;
   *   already-stored `Process` variable.
   * - `with*` / `in*` methods return a new `Process` by value, leaving the
   *   original unchanged, making them safe to use in chained expressions.
-  *   Every `set*` / `add*` method has a `with*` counterpart:
-  *   `setArgs` ↔ `withArgs`, `addArgs` ↔ `withAddedArgs`,
+  *   Most `set*` / `add*` method has a `with*` counterpart:
+  *   `addArgs` ↔ `withArgs`,
   *   `setWorkDir` ↔ `inWorkDir`, `setEnv` ↔ `withEnv`, etc.
   *
   * Examples:
@@ -229,7 +229,7 @@ private import theprocess.exception: ProcessException;
         return res;
     }
 
-    /// Ensure that copy, setArgs, addArgs, withArgs, and withAddedArgs work correctly
+    /// Ensure that copy, setArgs, addArgs, and withArgs work correctly
     unittest {
         import unit_threaded.assertions;
 
@@ -244,15 +244,14 @@ private import theprocess.exception: ProcessException;
         p.addArgs("arg4b");
         p._args.should == ["arg3", "arg4", "arg4b"];
 
-        // withArgs returns a new Process without modifying the original
+        // withArgs returns a new Process with args appended, without modifying the original
         auto p2 = p.withArgs("arg5", "arg6");
-        p2._args.should == ["arg5", "arg6"];
+        p2._args.should == ["arg3", "arg4", "arg4b", "arg5", "arg6"];
         p._args.should == ["arg3", "arg4", "arg4b"];
 
-        // withAddedArgs returns a new Process without modifying the original
-        auto p3 = p.withAddedArgs("arg7");
-        p3._args.should == ["arg3", "arg4", "arg4b", "arg7"];
-        p._args.should == ["arg3", "arg4", "arg4b"];
+        // withArgs on a fresh process works as expected (append to empty = set)
+        auto p3 = Process("other-program").withArgs("arg7");
+        p3._args.should == ["arg7"];
     }
 
     /** Return string representation of process to be started
@@ -264,6 +263,8 @@ private import theprocess.exception: ProcessException;
 
     /** Set arguments for the process
       *
+      * Note, replaces currently configured args for the process with provided args
+      *
       * Params:
       *     args = array of arguments to run program with
       **/
@@ -271,12 +272,15 @@ private import theprocess.exception: ProcessException;
         _args = args.dup;
     }
 
-    /** Return a new Process with arguments set to the provided values,
+    /** Return a new Process with the provided arguments appended,
       * leaving the original unchanged.
+      *
+      * This is the non-mutating counterpart of addArgs.
+      * Can be called multiple times to progressively build up arguments.
       **/
     Process withArgs(in string[] args...) const {
         auto result = this.copy();
-        result.setArgs(args);
+        result.addArgs(args);
         return result;
     }
 
@@ -306,17 +310,8 @@ private import theprocess.exception: ProcessException;
         _args ~= args;
     }
 
-    /** Return a new Process with the provided arguments appended,
-      * leaving the original unchanged.
-      **/
-    Process withAddedArgs(in string[] args...) const {
-        auto result = this.copy();
-        result.addArgs(args);
-        return result;
-    }
-
     /** Append a single argument, returning a new Process (non-mutating).
-      * Equivalent to withAddedArgs.
+      * Equivalent to withArgs.
       *
       * Examples:
       * ---
@@ -325,11 +320,11 @@ private import theprocess.exception: ProcessException;
       * ---
       **/
     Process opBinary(string op)(in string arg) const if (op == "~") {
-        return this.withAddedArgs(arg);
+        return this.withArgs(arg);
     }
 
     /** Append multiple arguments, returning a new Process (non-mutating).
-      * Equivalent to withAddedArgs.
+      * Equivalent to withArgs.
       *
       * Examples:
       * ---
@@ -338,7 +333,7 @@ private import theprocess.exception: ProcessException;
       * ---
       **/
     Process opBinary(string op)(in string[] args) const if (op == "~") {
-        return this.withAddedArgs(args);
+        return this.withArgs(args);
     }
 
     /** Append a single argument in place (mutating).
@@ -941,7 +936,7 @@ private import theprocess.exception: ProcessException;
     // Test the case when process executes fine
     auto result = Process(script_path)
         .withArgs("Hello")
-        .withAddedArgs("World")
+        .withArgs("World")
         .withEnv("MY_PARAM_1", "the")
         .withEnv("MY_PARAM_2", "Void")
         .execute
