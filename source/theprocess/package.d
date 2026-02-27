@@ -3,5 +3,6 @@
 module theprocess;
 
 public import theprocess.process: Process, ProcessResult;
-public import theprocess.utils: resolveProgram;
+public import theprocess.utils: resolveProgram, isProcessRunning;
 public import theprocess.exception: ProcessException;
+version(Posix) public import theprocess.utils: SystemUser, getSystemUser, getCurrentUser, isCurrentUser, systemUserExists;

@@ -21,6 +21,31 @@ thus it allows to easily use complex logic to prepare arguments and env for exte
 
 ---
 
+## Configuration methods
+
+Process configuration methods come in two families:
+
+- **`set*` / `add*`** — mutate the current instance in place and return `void`.
+  Use these when you have a stored `Process` variable that you want to modify conditionally.
+
+```d
+auto runner = Process("my-program").withArgs("--base-arg");
+if (condition)
+    runner.addArgs("--extra-arg");  // mutates runner in place
+runner.execute;
+```
+
+- **`with*` / `in*`** — return a **new** `Process` by value, leaving the original unchanged.
+  Safe to use in chained expressions or when deriving variants from a shared base.
+
+```d
+// Each call returns a fresh Process; the original is never modified
+auto result = Process("my-program")
+    .withArgs("--verbose")
+    .inWorkDir("/my/work/dir")
+    .execute;
+```
+
 ## Examples
 
 Simply execute the program:
@@ -108,6 +133,77 @@ if (!detach)
     std.process.wait(pid);
 ```
 
+
+## Running as a different user (Posix)
+
+On Posix systems a `Process` can be run as a different user by name or by explicit uid/gid:
+
+```d
+// Run as a named user
+Process("my-program")
+    .withUser("deploy")
+    .execute
+    .ensureOk;
+
+// Also switch the working directory to the user's home directory
+Process("my-program")
+    .withUser("deploy", true)
+    .execute
+    .ensureOk;
+
+// Or set uid/gid directly
+Process("my-program")
+    .withUID(1001)
+    .withGID(1001)
+    .execute
+    .ensureOk;
+```
+
+## Utilities
+
+### Checking whether a process is running
+
+```d
+import theprocess: isProcessRunning;
+
+if (isProcessRunning(pid.processID))
+    writeln("still running");
+```
+
+Works on Posix (via `kill(pid, 0)`) and Windows (via `GetExitCodeProcess`).
+
+### Resolving a program from PATH
+
+```d
+import theprocess: resolveProgram;
+
+auto path = resolveProgram("git");
+if (!path.isNull)
+    writeln("git is at: ", path.get);
+```
+
+### System user utilities (Posix)
+
+```d
+import theprocess: SystemUser, getSystemUser, getCurrentUser,
+                   isCurrentUser, systemUserExists;
+
+// Look up a user by name — returns null if not found
+Nullable!SystemUser user = getSystemUser("deploy");
+if (!user.isNull)
+    writeln(user.get.uid, " ", user.get.homeDir);
+
+// Get the current effective user
+SystemUser me = getCurrentUser();
+
+// Decide whether a user switch is needed
+if (!isCurrentUser("deploy"))
+    Process("myapp").withUser("deploy").spawn();
+
+// Simple existence check
+if (systemUserExists("postgres"))
+    writeln("postgres user is present");
+```
 
 ## License
 

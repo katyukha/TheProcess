@@ -13,7 +13,6 @@ private import std.format: format;
 
 version(Posix) {
     private import core.sys.posix.unistd;
-    private import core.sys.posix.pwd;
 }
 
 private import thepath;
@@ -133,11 +132,16 @@ private import theprocess.exception: ProcessException;
   * 3. Run one of `execute`, `spawn` or `pipe` methods, that will actually
   *    start the process.
   *
-  * Configuration methods are usually prefixed with `set` word, but they
-  * may also have semantic aliases. For example, the method `setArgs` also has
-  * an alias `withArgs`, and the method `setWorkDir` has an alias `inWorkDir`.
-  * Additionally, configuration methods always
-  * return the reference to current instance of the Process being configured.
+  * Configuration methods come in two families with distinct semantics:
+  *
+  * - `set*` / `add*` methods mutate the current instance in place and return
+  *   `void`, making them suitable for conditional modification of an
+  *   already-stored `Process` variable.
+  * - `with*` / `in*` methods return a new `Process` by value, leaving the
+  *   original unchanged, making them safe to use in chained expressions.
+  *   Most `set*` / `add*` method has a `with*` counterpart:
+  *   `addArgs` ↔ `withArgs`,
+  *   `setWorkDir` ↔ `inWorkDir`, `setEnv` ↔ `withEnv`, etc.
   *
   * Examples:
   * ---
@@ -213,7 +217,7 @@ private import theprocess.exception: ProcessException;
         if (this._env)
             res.setEnv(this._env);
         if (this._workdir)
-            res.inWorkDir(this._workdir);
+            res.setWorkDir(this._workdir);
 
         version(Posix) {
             res._uid = this._uid;
@@ -224,20 +228,29 @@ private import theprocess.exception: ProcessException;
         return res;
     }
 
-    /// Ensure that copy works
+    /// Ensure that copy, setArgs, addArgs, and withArgs work correctly
     unittest {
         import unit_threaded.assertions;
 
         auto p = Process("some-test-program").withArgs("arg1", "arg2");
         p._args.should == ["arg1", "arg2"];
-        // Check that result of set args return Process instance with new args
-        p.setArgs("arg3", "arg4")._args.should == ["arg3", "arg4"];
-        // Check that Process instance p was updated
+
+        // setArgs mutates in place (void return)
+        p.setArgs("arg3", "arg4");
         p._args.should == ["arg3", "arg4"];
 
-        // Try to use copy() to ensure that original instance was not changed
-        p.copy().setArgs("arg5", "arg6")._args.should == ["arg5", "arg6"];
-        p._args.should == ["arg3", "arg4"];
+        // addArgs mutates in place (void return)
+        p.addArgs("arg4b");
+        p._args.should == ["arg3", "arg4", "arg4b"];
+
+        // withArgs returns a new Process with args appended, without modifying the original
+        auto p2 = p.withArgs("arg5", "arg6");
+        p2._args.should == ["arg3", "arg4", "arg4b", "arg5", "arg6"];
+        p._args.should == ["arg3", "arg4", "arg4b"];
+
+        // withArgs on a fresh process works as expected (append to empty = set)
+        auto p3 = Process("other-program").withArgs("arg7");
+        p3._args.should == ["arg7"];
     }
 
     /** Return string representation of process to be started
@@ -249,19 +262,26 @@ private import theprocess.exception: ProcessException;
 
     /** Set arguments for the process
       *
+      * Note, replaces currently configured args for the process with provided args
+      *
       * Params:
       *     args = array of arguments to run program with
-      *
-      * Returns:
-      *     reference to this (process instance)
       **/
-    auto ref setArgs(in string[] args...) {
+    void setArgs(in string[] args...) {
         _args = args.dup;
-        return this;
     }
 
-    /// ditto
-    alias withArgs = setArgs;
+    /** Return a new Process with the provided arguments appended,
+      * leaving the original unchanged.
+      *
+      * This is the non-mutating counterpart of addArgs.
+      * Can be called multiple times to progressively build up arguments.
+      **/
+    Process withArgs(in string[] args...) const {
+        auto result = this.copy();
+        result.addArgs(args);
+        return result;
+    }
 
     /** Add arguments to the process.
       *
@@ -269,14 +289,11 @@ private import theprocess.exception: ProcessException;
       * to run at single point, and you need to add it conditionally.
       *
       * Params:
-      *     args = array of arguments to run program with
-      *
-      * Returns:
-      *     reference to this (process instance)
+      *     args = array of arguments to add
       *
       * Examples:
       * ---
-      * auto program = Process('my-program')
+      * auto program = Process("my-program")
       *     .withArgs("--some-option");
       *
       * if (some condition)
@@ -288,48 +305,121 @@ private import theprocess.exception: ProcessException;
       * writeln(result.output);
       * ---
       **/
-    auto ref addArgs(in string[] args...) {
+    void addArgs(in string[] args...) {
         _args ~= args;
-        return this;
+    }
+
+    /** Append a single argument, returning a new Process (non-mutating).
+      * Equivalent to withArgs.
+      *
+      * Examples:
+      * ---
+      * auto git = Process("git").withArgs("--git-dir", myPath);
+      * (git ~ "clone" ~ url).execute.ensureOk;
+      * ---
+      **/
+    Process opBinary(string op)(in string arg) const if (op == "~") {
+        return this.withArgs(arg);
+    }
+
+    /** Append multiple arguments, returning a new Process (non-mutating).
+      * Equivalent to withArgs.
+      *
+      * Examples:
+      * ---
+      * auto git = Process("git").withArgs("--git-dir", myPath);
+      * (git ~ ["clone", url]).execute.ensureOk;
+      * ---
+      **/
+    Process opBinary(string op)(in string[] args) const if (op == "~") {
+        return this.withArgs(args);
+    }
+
+    /** Append a single argument in place (mutating).
+      * Equivalent to addArgs.
+      **/
+    void opOpAssign(string op)(in string arg) if (op == "~") {
+        this.addArgs(arg);
+    }
+
+    /** Append multiple arguments in place (mutating).
+      * Equivalent to addArgs.
+      **/
+    void opOpAssign(string op)(in string[] args) if (op == "~") {
+        this.addArgs(args);
+    }
+
+    /// Ensure that ~ and ~= work correctly
+    unittest {
+        import unit_threaded.assertions;
+
+        auto p = Process("git").withArgs("--git-dir", "/my/path");
+
+        // ~ with single string returns new Process, original unchanged
+        auto p2 = p ~ "clone";
+        p2._args.should == ["--git-dir", "/my/path", "clone"];
+        p._args.should == ["--git-dir", "/my/path"];
+
+        // ~ with string[] returns new Process, original unchanged
+        auto p3 = p ~ ["clone", "https://example.com"];
+        p3._args.should == ["--git-dir", "/my/path", "clone", "https://example.com"];
+        p._args.should == ["--git-dir", "/my/path"];
+
+        // ~ chains correctly
+        auto p4 = p ~ "clone" ~ "https://example.com";
+        p4._args.should == ["--git-dir", "/my/path", "clone", "https://example.com"];
+        p._args.should == ["--git-dir", "/my/path"];
+
+        // ~= with single string mutates in place
+        auto p5 = p.copy();
+        p5 ~= "status";
+        p5._args.should == ["--git-dir", "/my/path", "status"];
+
+        // ~= with string[] mutates in place
+        auto p6 = p.copy();
+        p6 ~= ["log", "--oneline"];
+        p6._args.should == ["--git-dir", "/my/path", "log", "--oneline"];
     }
 
     /** Set work directory for the process to be started
       *
       * Params:
       *     workdir = working directory path to run process in
-      *
-      * Returns:
-      *     reference to this (process instance)
-      *
       **/
-    auto ref setWorkDir(in string workdir) {
+    void setWorkDir(in string workdir) {
         _workdir = workdir.idup;
-        return this;
     }
 
     /// ditto
-    auto ref setWorkDir(in Path workdir) {
+    void setWorkDir(in Path workdir) {
         _workdir = workdir.toString.idup;
-        return this;
+    }
+
+    /** Return a new Process with the working directory set to the provided
+      * path, leaving the original unchanged.
+      **/
+    Process inWorkDir(in string workdir) const {
+        auto result = this.copy();
+        result.setWorkDir(workdir);
+        return result;
     }
 
     /// ditto
-    alias inWorkDir = setWorkDir;
+    Process inWorkDir(in Path workdir) const {
+        auto result = this.copy();
+        result.setWorkDir(workdir);
+        return result;
+    }
 
     /** Set environemnt for the process to be started.
       * Could be called multiple times to update environment.
       *
       * Params:
       *     env = associative array to update environment to run process with.
-      *
-      * Returns:
-      *     reference to this (process instance)
-      *
       **/
-    auto ref setEnv(in string[string] env) {
+    void setEnv(in string[string] env) {
         foreach(i; env.byKeyValue)
             _env[i.key] = i.value;
-        return this;
     }
 
     /** Set environment variable (specified by key) to provided value
@@ -337,66 +427,100 @@ private import theprocess.exception: ProcessException;
       * Params:
       *     key = environment variable name
       *     value = environment variable value
-      *
-      * Returns:
-      *     reference to this (process instance)
-      *
       **/
-    auto ref setEnv(in string key, in string value) {
+    void setEnv(in string key, in string value) {
         _env[key.idup] = value.idup;
-        return this;
+    }
+
+    /** Return a new Process with the environment updated with the provided
+      * key-value pairs, leaving the original unchanged.
+      **/
+    Process withEnv(in string[string] env) const {
+        auto result = this.copy();
+        result.setEnv(env);
+        return result;
     }
 
     /// ditto
-    alias withEnv = setEnv;
+    Process withEnv(in string key, in string value) const {
+        auto result = this.copy();
+        result.setEnv(key, value);
+        return result;
+    }
 
     /** Run process with new environment
       * (do not inherit environment variables from parent process)
       **/
-    auto ref setNewEnv() {
+    void setNewEnv() {
         _config.flags |= std.process.Config.Flags.newEnv;
-        return this;
     }
 
-    /// ditto
-    alias withNewEnv = setNewEnv;
+    /** Return a new Process configured to start with a fresh environment
+      * (not inheriting parent environment variables), leaving the original
+      * unchanged.
+      **/
+    Process withNewEnv() const {
+        auto result = this.copy();
+        result.setNewEnv();
+        return result;
+    }
 
     /** Set process configuration
       **/
-    auto ref setConfig(in std.process.Config config) {
+    void setConfig(in std.process.Config config) {
         _config.flags = config.flags;
-        return this;
     }
 
-    /// ditto
-    alias withConfig = setConfig;
+    /** Return a new Process with the process configuration set to the
+      * provided value, leaving the original unchanged.
+      **/
+    Process withConfig(in std.process.Config config) const {
+        auto result = this.copy();
+        result.setConfig(config);
+        return result;
+    }
 
     /** Set configuration flag for process to be started
       **/
-    auto ref setFlag(in std.process.Config.Flags flag) {
+    void setFlag(in std.process.Config.Flags flag) {
         _config.flags |= flag;
-        return this;
     }
 
     /// ditto
-    auto ref setFlag(in std.process.Config flags) {
+    void setFlag(in std.process.Config flags) {
         _config |= flags;
-        return this;
+    }
+
+    /** Return a new Process with the given configuration flag set,
+      * leaving the original unchanged.
+      **/
+    Process withFlag(in std.process.Config.Flags flag) const {
+        auto result = this.copy();
+        result.setFlag(flag);
+        return result;
     }
 
     /// ditto
-    alias withFlag = setFlag;
+    Process withFlag(in std.process.Config flags) const {
+        auto result = this.copy();
+        result.setFlag(flags);
+        return result;
+    }
 
     /** Apply Config.stderrPassThrough flag.
       * With this flag, stderr will not be captured,
       * but instead directly passed to console or terminal.
       **/
-    auto ref setStderrPassThrough() {
-        return setFlag(std.process.Config.stderrPassThrough);
+    void setStderrPassThrough() {
+        setFlag(std.process.Config.stderrPassThrough);
     }
 
-    /// ditto
-    alias withStderrPassThrough = setStderrPassThrough;
+    /** Return a new Process with Config.stderrPassThrough set,
+      * leaving the original unchanged.
+      **/
+    Process withStderrPassThrough() const {
+        return withFlag(std.process.Config.stderrPassThrough);
+    }
 
     /** Set UID to run process with
       *
@@ -407,13 +531,18 @@ private import theprocess.exception: ProcessException;
       *     reference to this (process instance)
       *
       **/
-    version(Posix) auto ref setUID(in uid_t uid) {
+    version(Posix) void setUID(in uid_t uid) {
         _uid = uid;
-        return this;
     }
 
-    /// ditto
-    version(Posix) alias withUID = setUID;
+    /** Return a new Process configured to run with the given UID,
+      * leaving the original unchanged.
+      **/
+    version(Posix) Process withUID(in uid_t uid) const {
+        auto result = this.copy();
+        result.setUID(uid);
+        return result;
+    }
 
     /** Set GID to run process with
       *
@@ -424,13 +553,18 @@ private import theprocess.exception: ProcessException;
       *     reference to this (process instance)
       *
       **/
-    version(Posix) auto ref setGID(in gid_t gid) {
+    version(Posix) void setGID(in gid_t gid) {
         _gid = gid;
-        return this;
     }
 
-    /// ditto
-    version(Posix) alias withGID = setGID;
+    /** Return a new Process configured to run with the given GID,
+      * leaving the original unchanged.
+      **/
+    version(Posix) Process withGID(in gid_t gid) const {
+        auto result = this.copy();
+        result.setGID(gid);
+        return result;
+    }
 
     /** Run process as specified user
       *
@@ -439,52 +573,28 @@ private import theprocess.exception: ProcessException;
       *
       * Params:
       *     username = login of user to run process as
-      *
-      * Returns:
-      *     reference to this (process instance)
-      *
       **/
-    version(Posix) auto ref setUser(in string username, in bool userWorkDir=false) @trusted {
-        import std.string: toStringz;
+    version(Posix) void setUser(in string username, in bool userWorkDir=false) @trusted {
+        auto user = getSystemUser(username);
+        if (user.isNull)
+            throw new ProcessException("User %s does not exist".format(username));
 
-        /* pw info has following fields:
-         *     - pw_name,
-         *     - pw_passwd,
-         *     - pw_uid,
-         *     - pw_gid,
-         *     - pw_gecos,
-         *     - pw_dir,
-         *     - pw_shell,
-         */
-
-        import std.string: toStringz, fromStringz;
-        import core.stdc.errno: ENOENT, ESRCH, EBADF, EPERM;
-        passwd pwd;
-        passwd* result;
-        long bufsize = 16384;
-        char[] buf = new char[bufsize];
-
-        int s = getpwnam_r(username.toStringz, &pwd, &buf[0], bufsize, &result);
-        if (s == ENOENT || s == ESRCH || s == EBADF || s == EPERM || result is null)
-            // Such user does not exists
-            throw new ProcessException("User %s does not exists".format(username));
-
-        errnoEnforce(
-            s == 0,
-            "Cannot get info about user %s".format(username));
-
-        _uid = result.pw_uid;
-        _gid = result.pw_gid;
+        _uid = user.get.uid;
+        _gid = user.get.gid;
 
         if (userWorkDir)
-            // TODO: Better error handling when pw_dir does not exists
-            _workdir = result.pw_dir.fromStringz.idup;
-
-        return this;
+            _workdir = user.get.homeDir;
     }
 
-    ///
-    version(Posix) alias withUser = setUser;
+    /** Return a new Process configured to run as the given user,
+      * leaving the original unchanged.
+      **/
+    version(Posix) Process withUser(
+            in string username, in bool userWorkDir=false) @trusted const {
+        auto result = this.copy();
+        result.setUser(username, userWorkDir);
+        return result;
+    }
 
     /// Called before running process to run pre-exec hooks;
     private void setUpProcess() {
@@ -800,7 +910,7 @@ private import theprocess.exception: ProcessException;
     // Test the case when process executes fine
     auto result = Process(script_path)
         .withArgs("Hello")
-        .addArgs("World")
+        .withArgs("World")
         .withEnv("MY_PARAM_1", "the")
         .withEnv("MY_PARAM_2", "Void")
         .execute
