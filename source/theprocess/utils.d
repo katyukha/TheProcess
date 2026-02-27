@@ -120,3 +120,41 @@ unittest {
 }
 
 
+/** Check if system user with specified name exists
+  *
+  * Params:
+  *     username = name of user to check if exists
+  * Returns:
+  *     True if such user exists, otherwise false.
+  **/
+version(Posix) @trusted bool systemUserExists(in string username) {
+    import core.sys.posix.pwd: getpwnam_r, passwd;
+    import std.string: toStringz, fromStringz;
+    import core.stdc.errno: ENOENT, ESRCH, EBADF, EPERM;
+    import core.stdc.string: strerror;
+
+    passwd pwd;
+    passwd* result;
+    size_t bufsize = 16384;
+    char[] buf = new char[bufsize];
+
+    int s = getpwnam_r(username.toStringz, &pwd, &buf[0], bufsize, &result);
+    if (s == ENOENT || s == ESRCH || s == EBADF || s == EPERM || result is null)
+        return false;
+
+    if (s != 0)
+        throw new Exception(
+            "Got error on attempt to check if user %s exists: %s"
+            .format(username, strerror(s).fromStringz));
+
+    return true;
+}
+
+
+///
+version(Posix) unittest {
+    import unit_threaded.assertions;
+
+    systemUserExists("root").shouldBeTrue;
+    systemUserExists("this_user_definitely_does_not_exist_xyzzy").shouldBeFalse;
+}
