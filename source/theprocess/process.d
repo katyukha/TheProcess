@@ -571,10 +571,34 @@ private import theprocess.exception: ProcessException;
       * If this method applied, then the UID and GID to run process with
       * will be taked from record in passwd database
       *
+      * Note, that only UID and GID are changed by default: the environment
+      * of the process still describes the caller. In particular `HOME`,
+      * `USER` and `LOGNAME` are inherited as is, thus the process runs as
+      * one user, but its environment points at another one. This is what
+      * other process libraries do too, but it is rarely what is needed when
+      * privileges are dropped to a service user, because everything that
+      * writes to the home directory will try to write to home directory of
+      * the caller. Pass `userHomeDir` to point `HOME` at home directory of
+      * the user the process runs as.
+      *
+      * The home directory is taken from the passwd database as is, the same
+      * way `su` and `sudo -H` do it. It is not checked for existence: note
+      * that `adduser --system` uses `/nonexistent` as home directory by
+      * default, thus it is up to the caller to ensure that home directory of
+      * the user is usable.
+      *
+      * `HOME` is applied in the same way as any other environment variable,
+      * thus an explicit `setEnv("HOME", ...)` applied later wins.
+      *
       * Params:
       *     username = login of user to run process as
+      *     userWorkDir = if set, run the process in home directory of that
+      *         user, instead of the working directory of the caller.
+      *     userHomeDir = if set, point `HOME` of the process at home
+      *         directory of that user, instead of inheriting `HOME` of the
+      *         caller.
       **/
-    version(Posix) void setUser(in string username, in bool userWorkDir=false) @trusted {
+    version(Posix) void setUser(in string username, in bool userWorkDir=false, in bool userHomeDir=false) @trusted {
         auto user = getSystemUser(username);
         if (user.isNull)
             throw new ProcessException("User %s does not exist".format(username));
@@ -584,15 +608,22 @@ private import theprocess.exception: ProcessException;
 
         if (userWorkDir)
             _workdir = user.get.homeDir;
+
+        if (userHomeDir)
+            _env["HOME"] = user.get.homeDir;
     }
 
     /** Return a new Process configured to run as the given user,
       * leaving the original unchanged.
+      *
+      * See $(LREF Process.setUser) for the meaning of the parameters.
       **/
     version(Posix) Process withUser(
-            in string username, in bool userWorkDir=false) @trusted const {
+            in string username,
+            in bool userWorkDir=false,
+            in bool userHomeDir=false) @trusted const {
         auto result = this.copy();
-        result.setUser(username, userWorkDir);
+        result.setUser(username, userWorkDir, userHomeDir);
         return result;
     }
 
@@ -999,4 +1030,44 @@ version(Posix) @safe unittest {
         .output.strip;
 
     Path(workdir).realPath.should == Path("~").realPath;
+}
+
+
+/// Test that HOME of the process could be set to home dir of the user
+version(Posix) @safe unittest {
+    import std.string;
+
+    import unit_threaded.assertions;
+
+    auto user = getCurrentUser();
+
+    auto homeOf(in Process process) {
+        return process
+            .withArgs("-c", "echo $HOME")
+            .execute
+            .ensureOk(true)
+            .output.strip;
+    }
+
+    // By default HOME of the caller is kept as is,
+    // even if process runs as different user.
+    homeOf(
+        Process("sh")
+            .withEnv("HOME", "/some/other/home")
+            .withUser(user.name)
+    ).should == "/some/other/home";
+
+    // With userHomeDir, HOME points at home dir of the user.
+    homeOf(
+        Process("sh")
+            .withEnv("HOME", "/some/other/home")
+            .withUser(user.name, userHomeDir: true)
+    ).should == user.homeDir;
+
+    // HOME set explicitly after setting the user wins.
+    homeOf(
+        Process("sh")
+            .withUser(user.name, userHomeDir: true)
+            .withEnv("HOME", "/some/other/home")
+    ).should == "/some/other/home";
 }
