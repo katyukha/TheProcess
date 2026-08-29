@@ -1,5 +1,15 @@
 # Changelog
 
+## Release v0.1.2
+
+### Added
+
+- `Process.setUser` and `Process.withUser` got extra option `userHomeDir`.
+  When set, `HOME` of the process points at home directory of the user the
+  process runs as, instead of being inherited from the caller.
+
+---
+
 ## Release v0.1.1
 
 ### Added

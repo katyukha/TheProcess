@@ -151,6 +151,12 @@ Process("my-program")
     .execute
     .ensureOk;
 
+// Also point HOME at the home directory of that user
+Process("my-program")
+    .withUser("deploy", userHomeDir: true)
+    .execute
+    .ensureOk;
+
 // Or set uid/gid directly
 Process("my-program")
     .withUID(1001)
@@ -158,6 +164,13 @@ Process("my-program")
     .execute
     .ensureOk;
 ```
+
+Note, that by default only UID and GID are changed: the environment of the process
+still describes the caller, thus `HOME`, `USER` and `LOGNAME` are inherited as is.
+This matches what other process libraries do, but when privileges are dropped to a
+service user it usually means that everything writing to the home directory will try
+to write to home directory of the caller. Use `userHomeDir` to point `HOME` at home
+directory of the user the process runs as.
 
 ## Utilities
 
