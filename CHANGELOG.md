@@ -10,6 +10,9 @@
   and in the output attached to the message of `ensureStatus`.
   `ProcessResult.output` itself is not masked.
 - `Process.setSecretEnv` / `Process.withSecretEnv` — set environment variable and mask its value.
+- `Process.setUser` and `Process.withUser` got extra option `userLoginEnv`.
+  When set, `USER` and `LOGNAME` of the process are set to the name of the user the
+  process runs as, instead of being inherited from the caller.
 
 ---
 

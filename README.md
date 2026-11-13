@@ -179,6 +179,12 @@ Process("my-program")
     .execute
     .ensureOk;
 
+// Also set USER and LOGNAME to the name of that user
+Process("my-program")
+    .withUser("deploy", userHomeDir: true, userLoginEnv: true)
+    .execute
+    .ensureOk;
+
 // Or set uid/gid directly
 Process("my-program")
     .withUID(1001)
@@ -192,7 +198,8 @@ still describes the caller, thus `HOME`, `USER` and `LOGNAME` are inherited as i
 This matches what other process libraries do, but when privileges are dropped to a
 service user it usually means that everything writing to the home directory will try
 to write to home directory of the caller. Use `userHomeDir` to point `HOME` at home
-directory of the user the process runs as.
+directory of the user the process runs as, and `userLoginEnv` to set `USER` and
+`LOGNAME` to its name (`SHELL` is left as is).
 
 ## Utilities
 

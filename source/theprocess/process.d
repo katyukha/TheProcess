@@ -718,8 +718,15 @@ private string maskValues(in string text, in string[] masked) @safe pure {
       * default, thus it is up to the caller to ensure that home directory of
       * the user is usable.
       *
-      * `HOME` is applied in the same way as any other environment variable,
-      * thus an explicit `setEnv("HOME", ...)` applied later wins.
+      * In the same way, programs that take the name of the user from the
+      * environment (for example `getpass.getuser` in Python) see the caller
+      * instead of the user the process runs as. Pass `userLoginEnv` to set
+      * `USER` and `LOGNAME` to the name of that user. `SHELL` is left as is:
+      * the login shell of a service user is usually `nologin`, and it would
+      * break the programs that run `$SHELL`.
+      *
+      * `HOME`, `USER` and `LOGNAME` are applied in the same way as any other
+      * environment variable, thus an explicit `setEnv` applied later wins.
       *
       * Params:
       *     username = login of user to run process as
@@ -728,8 +735,15 @@ private string maskValues(in string text, in string[] masked) @safe pure {
       *     userHomeDir = if set, point `HOME` of the process at home
       *         directory of that user, instead of inheriting `HOME` of the
       *         caller.
+      *     userLoginEnv = if set, set `USER` and `LOGNAME` of the process
+      *         to the name of that user, instead of inheriting them from
+      *         the caller.
       **/
-    version(Posix) void setUser(in string username, in bool userWorkDir=false, in bool userHomeDir=false) @trusted {
+    version(Posix) void setUser(
+            in string username,
+            in bool userWorkDir=false,
+            in bool userHomeDir=false,
+            in bool userLoginEnv=false) @trusted {
         auto user = getSystemUser(username);
         if (user.isNull)
             throw new ProcessException("User %s does not exist".format(username));
@@ -742,6 +756,11 @@ private string maskValues(in string text, in string[] masked) @safe pure {
 
         if (userHomeDir)
             _env["HOME"] = user.get.homeDir;
+
+        if (userLoginEnv) {
+            _env["USER"] = user.get.name;
+            _env["LOGNAME"] = user.get.name;
+        }
     }
 
     /** Return a new Process configured to run as the given user,
@@ -752,9 +771,10 @@ private string maskValues(in string text, in string[] masked) @safe pure {
     version(Posix) Process withUser(
             in string username,
             in bool userWorkDir=false,
-            in bool userHomeDir=false) @trusted const {
+            in bool userHomeDir=false,
+            in bool userLoginEnv=false) @trusted const {
         auto result = this.copy();
-        result.setUser(username, userWorkDir, userHomeDir);
+        result.setUser(username, userWorkDir, userHomeDir, userLoginEnv);
         return result;
     }
 
@@ -1202,6 +1222,36 @@ version(Posix) @safe unittest {
             .withUser(user.name, userHomeDir: true)
             .withEnv("HOME", "/some/other/home")
     ).should == "/some/other/home";
+}
+
+
+/// Test that USER and LOGNAME of the process could be set to name of the user
+version(Posix) @safe unittest {
+    import std.string;
+
+    import unit_threaded.assertions;
+
+    auto user = getCurrentUser();
+
+    auto loginOf(in Process process) {
+        return process
+            .withArgs("-c", "echo $USER:$LOGNAME")
+            .execute
+            .ensureOk(true)
+            .output.strip;
+    }
+
+    auto caller = Process("sh")
+        .withEnv("USER", "some-user")
+        .withEnv("LOGNAME", "some-logname");
+
+    // By default USER and LOGNAME of the caller are kept as is,
+    // even if process runs as different user.
+    loginOf(caller.withUser(user.name)).should == "some-user:some-logname";
+
+    // With userLoginEnv, they name the user the process runs as.
+    loginOf(caller.withUser(user.name, userLoginEnv: true))
+        .should == user.name ~ ":" ~ user.name;
 }
 
 
