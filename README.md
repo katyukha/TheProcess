@@ -134,6 +134,28 @@ if (!detach)
 ```
 
 
+## Keeping secrets out of logs
+
+`Process.toString` and the default message of `ensureStatus` / `ensureOk` contain the arguments
+(and `toString` the environment) of the process. If a password or token is passed to the process,
+mask it, and it will be replaced by `***` in every text this library renders:
+
+```d
+auto result = Process("git")
+    .withArgs("clone", "https://user:%s@host/repo".format(password))
+    .withMasked(password)                       // mask any number of values
+    .withSecretEnv("MY_TOKEN", token)           // withEnv + withMasked
+    .execute
+    .ensureOk(true);
+// On failure the message contains: clone https://user:***@host/repo
+```
+
+Masked values are replaced in `toString`, in the messages of exceptions thrown by `Process`,
+in the default message of `ensureStatus` and in the output attached to its message.
+`ProcessResult.output` itself is not masked: mask it yourself if you log it.
+A message passed to `ensureStatus` explicitly is used as is.
+
+
 ## Running as a different user (Posix)
 
 On Posix systems a `Process` can be run as a different user by name or by explicit uid/gid:

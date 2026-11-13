@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `Process.setMasked` / `Process.withMasked` — mask values (passwords, tokens) passed to the
+  process: each occurrence is replaced by `***` in `Process.toString`, in the messages of
+  exceptions thrown by `Process`, in the default message of `ProcessResult.ensureStatus`
+  and in the output attached to the message of `ensureStatus`.
+  `ProcessResult.output` itself is not masked.
+- `Process.setSecretEnv` / `Process.withSecretEnv` — set environment variable and mask its value.
+
+---
+
 ## Release v0.1.2
 
 ### Added

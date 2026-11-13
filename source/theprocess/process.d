@@ -21,6 +21,22 @@ private import theprocess.utils;
 private import theprocess.exception: ProcessException;
 
 
+/** Replace every occurrence of the masked values in the text by `***`.
+  *
+  * Longer values are replaced first, thus a value that contains another
+  * masked value is not half revealed.
+  **/
+private string maskValues(in string text, in string[] masked) @safe pure {
+    import std.algorithm.sorting: sort;
+    import std.array: replace;
+
+    string result = text.idup;
+    foreach(value; masked.dup.sort!((a, b) => a.length > b.length))
+        result = result.replace(value, "***");
+    return result;
+}
+
+
 /** Process result, produced by 'execute' method of Process.
   **/
 @safe immutable struct ProcessResult {
@@ -29,6 +45,9 @@ private import theprocess.exception: ProcessException;
 
     /// The arguments passed to the program to obtain this result.
     private string[] _args;
+
+    /// The values that must not appear in messages built from this result.
+    private string[] _masked;
 
     /// exit code of the process
     int status;
@@ -42,10 +61,12 @@ private import theprocess.exception: ProcessException;
     private pure this(
             in string program,
             immutable string[] args,
+            immutable string[] masked,
             in int status,
             in string output) nothrow {
         this._program = program.idup;
         this._args = args;
+        this._masked = masked;
         this.status = status;
         this.output = output.idup;
     }
@@ -75,7 +96,9 @@ private import theprocess.exception: ProcessException;
       * Params:
       *     msg = message to throw in exception in case of check failure
       *     add_output = if set to True, then output of command will be attached
-      *         to message on failure.
+      *         to message on failure. The values masked on the process
+      *         (see $(LREF Process.setMasked)) are replaced by `***` in the
+      *         attached output.
       *     expected = expected exit-code, if differ, then
       *         exception will be thrown.
       **/
@@ -83,7 +106,7 @@ private import theprocess.exception: ProcessException;
             in string msg, in bool add_output, in int expected=0) const {
         enforce!E(
             isOk(expected),
-            !add_output ? msg : msg ~ "\nOutput: " ~ output);
+            !add_output ? msg : msg ~ "\nOutput: " ~ maskValues(output, _masked));
         return this;
     }
 
@@ -99,8 +122,10 @@ private import theprocess.exception: ProcessException;
     /// ditto
     auto ref ensureStatus(E : Throwable = ProcessException)(in bool add_output, in int expected=0) const {
         return ensureStatus!E(
-            "Program %s with args %s failed! Expected exit-code %s, got %s.".format(
-                _program, _args, expected, status),
+            maskValues(
+                "Program %s with args %s failed! Expected exit-code %s, got %s.".format(
+                    _program, _args, expected, status),
+                _masked),
             add_output,
             expected);
     }
@@ -168,6 +193,7 @@ private import theprocess.exception: ProcessException;
     private string[] _args;
     private string[string] _env=null;
     private string _workdir=null;
+    private string[] _masked;
     private std.process.Config _config=std.process.Config.none;
 
     /* TODO: May be it have sense to add somekind of lock
@@ -218,6 +244,8 @@ private import theprocess.exception: ProcessException;
             res.setEnv(this._env);
         if (this._workdir)
             res.setWorkDir(this._workdir);
+        if (this._masked)
+            res.setMasked(this._masked);
 
         version(Posix) {
             res._uid = this._uid;
@@ -253,11 +281,16 @@ private import theprocess.exception: ProcessException;
         p3._args.should == ["arg7"];
     }
 
-    /** Return string representation of process to be started
+    /** Return string representation of process to be started.
+      *
+      * The masked values (see $(LREF Process.setMasked)) are replaced
+      * by `***`.
       **/
     string toString() const {
-        return "Program: %s, args: %s, env: %s, workdir: %s".format(
-            _program, _args.join(" "), _env, _workdir);
+        return maskValues(
+            "Program: %s, args: %s, env: %s, workdir: %s".format(
+                _program, _args.join(" "), _env, _workdir),
+            _masked);
     }
 
     /** Set arguments for the process
@@ -446,6 +479,104 @@ private import theprocess.exception: ProcessException;
         auto result = this.copy();
         result.setEnv(key, value);
         return result;
+    }
+
+    /** Mask the provided values in every text rendered for this process.
+      *
+      * Use it for secrets passed to the process (passwords, tokens), to keep
+      * them out of logs. Each occurrence of a masked value is replaced
+      * by `***` in:
+      *
+      * - the result of `toString`,
+      * - the messages of exceptions thrown by this process,
+      * - the default message of `ProcessResult.ensureStatus`,
+      * - the output attached to the message of `ProcessResult.ensureStatus`.
+      *
+      * Only the value is replaced, not the whole argument that contains it,
+      * thus the context stays readable: `https://user:***@host/repo`.
+      *
+      * `ProcessResult.output` is not masked: it is the data produced by the
+      * program, and it is up to the caller to mask it when logging.
+      *
+      * Could be called multiple times to mask more values.
+      * Empty values are ignored.
+      *
+      * Params:
+      *     values = values to mask
+      *
+      * Examples:
+      * ---
+      * Process("git")
+      *     .withArgs("clone", "https://user:%s@host/repo".format(password))
+      *     .withMasked(password)
+      *     .execute
+      *     .ensureOk(true);
+      * ---
+      **/
+    void setMasked(in string[] values...) {
+        _masked ~= values;
+    }
+
+    /** Return a new Process with the provided values masked,
+      * leaving the original unchanged.
+      *
+      * See $(LREF Process.setMasked) for details.
+      **/
+    Process withMasked(in string[] values...) const {
+        auto result = this.copy();
+        result.setMasked(values);
+        return result;
+    }
+
+    /** Set environment variable (specified by key) to provided value,
+      * and mask this value (see $(LREF Process.setMasked)).
+      *
+      * Params:
+      *     key = environment variable name
+      *     value = environment variable value, that must be kept out of logs
+      **/
+    void setSecretEnv(in string key, in string value) {
+        setEnv(key, value);
+        setMasked(value);
+    }
+
+    /** Return a new Process with the environment variable set to the
+      * provided value and this value masked, leaving the original unchanged.
+      **/
+    Process withSecretEnv(in string key, in string value) const {
+        auto result = this.copy();
+        result.setSecretEnv(key, value);
+        return result;
+    }
+
+    /// Ensure that masked values do not appear in text representation
+    unittest {
+        import unit_threaded.assertions;
+
+        auto p = Process("git")
+            .withArgs("clone", "https://user:s3cret@host/repo")
+            .withMasked("s3cret")
+            .withSecretEnv("GIT_TOKEN", "t0ken");
+
+        p.toString.should ==
+            `Program: git, args: clone https://user:***@host/repo, ` ~
+            `env: ["GIT_TOKEN":"***"], workdir: `;
+
+        // The process itself still gets the real values
+        p._args.should == ["clone", "https://user:s3cret@host/repo"];
+        p._env.should == ["GIT_TOKEN": "t0ken"];
+
+        // Masks survive derivation of new process
+        (p ~ "--depth=1").toString.should ==
+            `Program: git, args: clone https://user:***@host/repo --depth=1, ` ~
+            `env: ["GIT_TOKEN":"***"], workdir: `;
+
+        // A value that contains another masked value is masked as a whole,
+        // whatever the order the values were masked in.
+        Process("prog")
+            .withArgs("pass-and-more", "pass")
+            .withMasked("pass", "pass-and-more")
+            .toString.should == "Program: prog, args: *** ***, env: [], workdir: ";
     }
 
     /** Run process with new environment
@@ -743,7 +874,8 @@ private import theprocess.exception: ProcessException;
             _config,
             max_output,
             _workdir);
-        return ProcessResult(_program, _args.idup, res.status, res.output);
+        return ProcessResult(
+            _program, _args.idup, _masked.idup, res.status, res.output);
     }
 
     /// Spawn process
@@ -1070,4 +1202,49 @@ version(Posix) @safe unittest {
             .withUser(user.name, userHomeDir: true)
             .withEnv("HOME", "/some/other/home")
     ).should == "/some/other/home";
+}
+
+
+/// Test that masked values are kept out of the messages of failed process
+@safe unittest {
+    import std.string;
+    import std.ascii : newline;
+
+    import unit_threaded.assertions;
+
+    auto temp_root = createTempPath();
+    scope(exit) temp_root.remove();
+
+    version(Posix) {
+        import std.conv: octal;
+        auto script_path = temp_root.join("test-script.sh");
+        script_path.writeFile(
+            "#!" ~ nativeShell ~ newline ~
+            `printf "Test out: $1, $MY_TOKEN"` ~ newline);
+        // Add permission to run this script
+        script_path.setAttributes(octal!755);
+    } else version(Windows) {
+        auto script_path = temp_root.join("test-script.cmd");
+        script_path.writeFile(
+            `@echo off` ~ newline ~
+            `echo|set /p DUMMY="Test out: %1, %MY_TOKEN%"` ~ newline);
+    }
+
+    auto result = Process(script_path)
+        .withArgs("s3cret")
+        .withMasked("s3cret")
+        .withSecretEnv("MY_TOKEN", "t0ken")
+        .execute;
+
+    // The output itself is not masked
+    result.output.chomp.should == "Test out: s3cret, t0ken";
+
+    // Default message: both the args and the attached output are masked
+    result.ensureOk(true, 42).shouldThrowWithMessage!ProcessException(
+        "Program %s with args %s failed! Expected exit-code %s, got %s.\nOutput: %s".format(
+            result._program, ["***"], 42, 0, "Test out: ***, ***"));
+
+    // Custom message: the attached output is masked
+    result.ensureOk("Error message", true, 42).shouldThrowWithMessage!ProcessException(
+        "Error message\nOutput: Test out: ***, ***");
 }
