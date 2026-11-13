@@ -1,5 +1,21 @@
 # Changelog
 
+## Release v0.1.3
+
+### Added
+
+- `Process.setMasked` / `Process.withMasked` — mask values (passwords, tokens) passed to the
+  process: each occurrence is replaced by `***` in `Process.toString`, in the messages of
+  exceptions thrown by `Process`, in the default message of `ProcessResult.ensureStatus`
+  and in the output attached to the message of `ensureStatus`.
+  `ProcessResult.output` itself is not masked.
+- `Process.setSecretEnv` / `Process.withSecretEnv` — set environment variable and mask its value.
+- `Process.setUser` and `Process.withUser` got extra option `userLoginEnv`.
+  When set, `USER` and `LOGNAME` of the process are set to the name of the user the
+  process runs as, instead of being inherited from the caller.
+
+---
+
 ## Release v0.1.2
 
 ### Added
